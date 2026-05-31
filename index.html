@@ -1375,12 +1375,16 @@ function makeQRSvg(seed){
   return `<svg width="220" height="220" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg"><rect width="220" height="220" fill="white" rx="12"/>${rects}</svg>`;
 }
 function showTokenQR(){
+  const cust = (()=>{try{return JSON.parse(localStorage.getItem('turno-custom'))||{}}catch(e){return {}}})();
+  const hosp = cust.hospital || 'Apollo Hospitals';
+  const doc = cust.doctor || 'Dr. Karthik R';
+  const dept = cust.dept || 'Dermatology';
   document.getElementById('qr-token').textContent=State.yourToken;
-  document.getElementById('qr-hosp').textContent='Apollo Hospitals';
-  document.getElementById('qr-dept').textContent='Dermatology · Dr. Karthik R';
+  document.getElementById('qr-hosp').textContent=hosp;
+  document.getElementById('qr-dept').textContent=dept + ' · ' + doc;
   const now=new Date(); document.getElementById('qr-date').textContent='Today, '+now.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()];
   document.getElementById('qr-time').textContent='10:30 AM';
-  document.getElementById('qr-canvas').innerHTML=makeQRSvg('TURNO-'+State.yourToken+'-APOLLO');
+  document.getElementById('qr-canvas').innerHTML=makeQRSvg('TURNO-'+State.yourToken+'-'+hosp.toUpperCase().replace(/\s/g,''));
   nav('s-token-qr');
 }
 function downloadTicket(){toast('Ticket saved to gallery','success');}
