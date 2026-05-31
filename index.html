@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<title>Turno - Skip the Wait</title>
+<link rel="manifest" href="manifest.json"/>
+<meta name="theme-color" content="#1565C0"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<link rel="apple-touch-icon" href="icons/icon-192.png"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+tailwind.config={darkMode:'class',theme:{extend:{colors:{
+brand:{50:'#e3f2fd',100:'#bbdefb',200:'#90caf9',300:'#64b5f6',400:'#42a5f5',500:'#1E88E5',600:'#1565C0',700:'#0D47A1',800:'#0a3d8f',900:'#082e6b'},
+accent:{50:'#e8f5e9',100:'#c8e6c9',200:'#a5d6a7',300:'#81c784',400:'#66bb6a',500:'#4CAF50',600:'#43A047',700:'#388E3C'},
+warn:{50:'#fff3e0',100:'#ffe0b2',400:'#FFA726',500:'#FF9800',600:'#FB8C00'},
+danger:{50:'#fce4ec',500:'#E53935',600:'#D32F2F'},
+gray:{50:'#FAFAFA',100:'#F5F5F5',200:'#EEEEEE',300:'#E0E0E0',400:'#BDBDBD',500:'#9E9E9E',600:'#757575',700:'#616161',800:'#424242',900:'#212121'}
+},fontFamily:{sans:['Inter','system-ui','sans-serif']}}}}
+</script>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:'Inter',sans-serif;overscroll-behavior:none;background:#0D47A1;margin:0}
+.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;user-select:none}
+.material-symbols-outlined.fill{font-variation-settings:'FILL' 1}
+.hide-scrollbar::-webkit-scrollbar{display:none}
+.hide-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
+.screen{display:none;position:absolute;inset:0;flex-direction:column;background:#FAFAFA}
+.screen.active{display:flex}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideRight{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes pulse2{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes toastIn{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
+.fade-up{animation:fadeUp .3s ease forwards}
+.slide-right{animation:slideRight .25s ease forwards}
+.live-dot{animation:pulse2 1.5s ease-in-out infinite}
+.pb-safe{padding-bottom:max(env(safe-area-inset-bottom,20px),20px)}
+@media (min-width:500px){
+  body{display:flex;justify-content:center;align-items:center;min-height:100vh}
+  #app{width:393px;height:852px;border-radius:44px;overflow:hidden;box-shadow:0 30px 90px rgba(0,0,0,.5);border:6px solid #222;position:relative}
+}
+@media (max-width:499px){#app{width:100%;min-height:100dvh;position:relative}}
+.progress-bar{height:10px;border-radius:5px;background:#E0E0E0;overflow:hidden}
+.progress-fill{height:100%;border-radius:5px;background:linear-gradient(90deg,#1E88E5,#42A5F5);transition:width .8s ease}
+#toast{position:absolute;top:60px;left:50%;transform:translateX(-50%);z-index:200;display:none;animation:toastIn .25s ease}
+#toast.show{display:flex}
+.sheet-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.5);z-index:150;display:none}
+.sheet-backdrop.show{display:block}
+.sheet{position:absolute;bottom:0;left:0;right:0;background:white;border-radius:24px 24px 0 0;z-index:160;animation:slideUp .3s ease;max-height:85%;overflow-y:auto}
+.tab-active{color:#1565C0;border-bottom:2px solid #1565C0;font-weight:700}
+.chip-active{background:#1565C0;border-color:#1565C0;color:white}
+.chip-active span{color:white !important}
+input:focus,textarea:focus{outline:none;border-color:#1E88E5}
+.switch{width:44px;height:24px;background:#E0E0E0;border-radius:12px;position:relative;cursor:pointer;transition:background .2s}
+.switch.on{background:#4CAF50}
+.switch-knob{width:20px;height:20px;background:white;border-radius:50%;position:absolute;top:2px;left:2px;transition:left .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.switch.on .switch-knob{left:22px}
+/* ===== Demo Map ===== */
+.map-wrap{position:relative;height:240px;border-radius:16px;overflow:hidden;background:#E8F0F7}
+.map-svg{width:100%;height:100%;display:block}
+.map-route{fill:none;stroke:#1565C0;stroke-width:5;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 1px 2px rgba(21,101,192,.35));stroke-dasharray:600;stroke-dashoffset:600;animation:drawRoute 2s ease forwards}
+.map-route-bg{fill:none;stroke:white;stroke-width:8;stroke-linecap:round;stroke-linejoin:round}
+@keyframes drawRoute{to{stroke-dashoffset:0}}
+@keyframes carMove{0%{offset-distance:0%}100%{offset-distance:100%}}
+.map-car{offset-path:path('M40 200 L90 170 L150 175 L170 130 L230 110 L260 70 L320 60');offset-rotate:auto;animation:carMove 6s linear infinite;animation-delay:1.5s}
+.map-pulse{transform-origin:center;animation:pulse2 1.8s ease-in-out infinite}
+.map-overlay{position:absolute;left:12px;right:12px;bottom:12px;background:white;border-radius:12px;padding:10px 12px;display:flex;align-items:center;gap:10px;box-shadow:0 4px 14px rgba(0,0,0,.12)}
+.map-controls{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:6px}
+.map-ctrl{width:34px;height:34px;background:white;border-radius:8px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.15);cursor:pointer}
+.map-ctrl:active{transform:scale(.92)}
+/* ===== Leaflet customizations ===== */
+.leaflet-container{font-family:'Inter',sans-serif;background:#EAF1F8}
+.leaflet-control-attribution{font-size:9px !important;background:rgba(255,255,255,.7) !important}
+.leaflet-popup-content-wrapper{border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.18);padding:2px}
+.leaflet-popup-content{margin:10px 12px;font-size:12px;line-height:1.35}
+.leaflet-popup-tip{box-shadow:0 4px 10px rgba(0,0,0,.1)}
+.pin-you{position:relative;width:24px;height:24px}
+.pin-you::before{content:'';position:absolute;inset:-10px;border-radius:50%;background:#1E88E5;opacity:.25;animation:pulse2 1.8s ease-in-out infinite}
+.pin-you::after{content:'';position:absolute;inset:4px;border-radius:50%;background:#1565C0;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.pin-hosp{width:34px;height:42px;position:relative;display:flex;align-items:center;justify-content:center;color:white;font-weight:800;font-size:16px;text-shadow:0 1px 1px rgba(0,0,0,.3)}
+.pin-hosp svg{position:absolute;inset:0;width:100%;height:100%;filter:drop-shadow(0 3px 4px rgba(0,0,0,.3))}
+.pin-hosp span{position:relative;margin-top:-8px;font-family:'Material Symbols Outlined';font-variation-settings:'FILL' 1;font-size:18px}
+/* ===== Dark Mode ===== */
+body.dark{background:#000}
+body.dark .bg-white{background-color:#1C1C1E !important}
+body.dark .bg-gray-50{background-color:#0F0F10 !important}
+body.dark .bg-gray-100{background-color:#2C2C2E !important}
+body.dark .bg-gray-200{background-color:#3A3A3C !important}
+body.dark .text-gray-900{color:#F5F5F7 !important}
+body.dark .text-gray-800{color:#E5E5EA !important}
+body.dark .text-gray-700{color:#D1D1D6 !important}
+body.dark .text-gray-600{color:#AEAEB2 !important}
+body.dark .text-gray-500{color:#8E8E93 !important}
+body.dark .text-gray-400{color:#636366 !important}
+body.dark .border-gray-100{border-color:#2C2C2E !important}
+body.dark .border-gray-200{border-color:#38383A !important}
+body.dark .border-gray-300{border-color:#48484A !important}
+body.dark .divide-gray-100>*+*{border-color:#2C2C2E !important}
+body.dark .screen{background:#0F0F10}
+body.dark .bg-brand-50{background-color:rgba(30,136,229,.15) !important}
+body.dark .bg-accent-50{background-color:rgba(76,175,80,.15) !important}
+body.dark .bg-purple-50{background-color:rgba(123,31,162,.18) !important}
+body.dark .bg-orange-50{background-color:rgba(251,140,0,.18) !important}
+body.dark .bg-red-50,body.dark .bg-danger-50{background-color:rgba(229,57,53,.18) !important}
+body.dark .bg-warn-50{background-color:rgba(255,152,0,.18) !important}
+body.dark .bg-yellow-50{background-color:rgba(245,158,11,.15) !important}
+body.dark .shadow-sm,body.dark .shadow-md,body.dark .shadow-lg{box-shadow:0 1px 3px rgba(0,0,0,.6) !important}
+body.dark input,body.dark textarea{background:#2C2C2E !important;color:#F5F5F7 !important;border-color:#3A3A3C !important}
+body.dark .switch{background:#3A3A3C}
+body.dark .leaflet-container{background:#1C1C1E}
+body.dark .map-overlay{background:#2C2C2E;color:#F5F5F7}
+body.dark .map-overlay p{color:#F5F5F7 !important}
+body.dark .map-ctrl{background:#2C2C2E}
+body.dark .map-ctrl span{color:#F5F5F7 !important}
+body.dark .bg-brand-600{background-color:#1976D2 !important}
+body.dark #toast{background:#2C2C2E !important;color:#F5F5F7}
+body.dark .sheet{background:#1C1C1E}
+body.dark .sheet h3{color:#F5F5F7}
+body.dark .sheet p{color:#AEAEB2}
+body.dark .pin-you::after{border-color:#1C1C1E}
+body.dark .from-brand-50{--tw-gradient-from:rgba(30,136,229,.2) !important}
+body.dark .to-brand-100{--tw-gradient-to:rgba(30,136,229,.3) !important}
+body.dark .from-brand-500{--tw-gradient-from:#1565C0 !important}
+body.dark .from-accent-500{--tw-gradient-from:#388E3C !important}
+body.dark .border-brand-200{border-color:rgba(30,136,229,.4) !important}
+/* ===== Onboarding / Login ===== */
+.onb-slide{display:none;flex-direction:column;align-items:center;justify-content:center;padding:0 32px;text-align:center;height:100%}
+.onb-slide.active{display:flex}
+.onb-illust{width:260px;height:260px;border-radius:32px;display:flex;align-items:center;justify-content:center;margin-bottom:32px;position:relative;overflow:hidden}
+.onb-dot{width:8px;height:8px;border-radius:50%;background:#E0E0E0;transition:all .3s}
+.onb-dot.active{background:#1565C0;width:24px;border-radius:4px}
+.otp-input{width:48px;height:56px;border:2px solid #E0E0E0;border-radius:12px;text-align:center;font-size:22px;font-weight:700;color:#1565C0}
+.otp-input:focus{border-color:#1565C0;outline:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+.splash-logo{animation:fadeUp .8s ease}
+.splash-ring{animation:spin 1s linear infinite}
+/* ===== QR + Hero ===== */
+.qr-grid{display:grid;width:220px;height:220px;padding:14px;background:white;border-radius:18px;box-shadow:0 6px 24px rgba(0,0,0,.12)}
+.qr-cell{background:#0F0F10}
+.qr-cell.off{background:transparent}
+.hero{position:relative;height:200px;overflow:hidden;background:linear-gradient(135deg,#1E88E5,#1565C0)}
+.hero::after{content:'';position:absolute;inset:0;background:radial-gradient(circle at 80% 20%,rgba(255,255,255,.2),transparent 60%)}
+.pill-tab{padding:8px 16px;border-radius:20px;font-size:13px;font-weight:600;color:#757575;background:#F5F5F5;white-space:nowrap}
+.pill-tab.active{background:#1565C0;color:white}
+.review-stars{color:#FBC02D;letter-spacing:1px}
+body.dark .qr-grid{background:#F5F5F7}
+body.dark .qr-cell{background:#0F0F10}
+body.dark .pill-tab{background:#374151;color:#9CA3AF}
+body.dark .pill-tab.active{background:#1565C0;color:white}
+/* Skeleton loading placeholder */
+@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+.skeleton{background:linear-gradient(90deg,#F3F4F6 25%,#E5E7EB 50%,#F3F4F6 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:12px}
+body.dark .skeleton{background:linear-gradient(90deg,#374151 25%,#4B5563 50%,#374151 75%);background-size:200% 100%}
+/* Video call full-height */
+#s-video-call.active{display:flex;flex-direction:column}
+#s-video-call.active .flex-1{display:flex}
+</style>
+</head>
+<body>
+<div id="app" class="bg-gray-50 relative overflow-hidden">
+
+<!-- ============ SPLASH ============ -->
+<div id="s-splash" class="screen active fade-up" style="background:linear-gradient(160deg,#1565C0 0%,#0D47A1 100%)">
+  <div class="flex-1 flex flex-col items-center justify-center text-white">
+    <div class="splash-logo flex flex-col items-center">
+      <div class="w-24 h-24 rounded-3xl bg-white/15 backdrop-blur flex items-center justify-center mb-5 border border-white/20"><span class="material-symbols-outlined fill text-white" style="font-size:56px">queue</span></div>
+      <h1 class="text-4xl font-extrabold tracking-tight">Turno</h1>
+      <p class="text-sm text-brand-100 mt-2">Skip the wait. Save your time.</p>
+    </div>
+  </div>
+  <div class="pb-12 flex justify-center"><div class="splash-ring w-8 h-8 rounded-full border-2 border-white/30 border-t-white"></div></div>
+</div>
+
+<!-- ============ ONBOARDING ============ -->
+<div id="s-onboarding" class="screen">
+  <main class="flex-1 relative overflow-hidden">
+    <button onclick="nav('s-login')" class="absolute top-12 right-5 z-10 text-sm font-semibold text-gray-500 active:opacity-60">Skip</button>
+    <div id="onb-1" class="onb-slide active">
+      <div class="onb-illust" style="background:linear-gradient(135deg,#E3F2FD,#BBDEFB)">
+        <span class="material-symbols-outlined fill text-brand-600" style="font-size:120px">format_list_numbered</span>
+      </div>
+      <h2 class="text-2xl font-extrabold text-gray-900 mb-2">No More Waiting in Line</h2>
+      <p class="text-sm text-gray-500">Book your token in seconds and join the queue from the comfort of your home or office.</p>
+    </div>
+    <div id="onb-2" class="onb-slide">
+      <div class="onb-illust" style="background:linear-gradient(135deg,#E8F5E9,#C8E6C9)">
+        <span class="material-symbols-outlined fill text-accent-600" style="font-size:120px">notifications_active</span>
+      </div>
+      <h2 class="text-2xl font-extrabold text-gray-900 mb-2">Track in Real-Time</h2>
+      <p class="text-sm text-gray-500">Live queue updates on WhatsApp and in-app. We notify you when your turn is approaching.</p>
+    </div>
+    <div id="onb-3" class="onb-slide">
+      <div class="onb-illust" style="background:linear-gradient(135deg,#FFF3E0,#FFE0B2)">
+        <span class="material-symbols-outlined fill text-warn-500" style="font-size:120px">directions_car</span>
+      </div>
+      <h2 class="text-2xl font-extrabold text-gray-900 mb-2">Arrive Just in Time</h2>
+      <p class="text-sm text-gray-500">Smart travel planner tells you exactly when to leave based on live traffic conditions.</p>
+    </div>
+  </main>
+  <div class="px-8 pb-8 pt-4">
+    <div class="flex items-center justify-center gap-2 mb-6"><span class="onb-dot active" id="dot-1"></span><span class="onb-dot" id="dot-2"></span><span class="onb-dot" id="dot-3"></span></div>
+    <button onclick="onbNext()" id="onb-btn" class="w-full bg-brand-600 text-white font-bold text-base py-4 rounded-xl active:scale-[0.98] flex items-center justify-center gap-2">Continue <span class="material-symbols-outlined">arrow_forward</span></button>
+  </div>
+</div>
+
+<!-- ============ LOGIN ============ -->
+<div id="s-login" class="screen">
+  <header class="bg-white px-5 py-3 flex items-center gap-3"><button onclick="nav('s-onboarding')" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button></header>
+  <main class="flex-1 px-6 py-4">
+    <h1 class="text-3xl font-extrabold text-gray-900">Welcome to Turno</h1>
+    <p class="text-sm text-gray-500 mt-2 mb-8">Enter your mobile number to continue. We'll send you a 6-digit OTP.</p>
+    <label class="text-xs font-bold text-gray-500 mb-2 block">Mobile Number</label>
+    <div class="flex gap-2 mb-6">
+      <div class="bg-white border border-gray-200 rounded-xl px-3 py-3 flex items-center gap-2"><span class="text-lg">🇮🇳</span><span class="text-sm font-semibold text-gray-900">+91</span></div>
+      <input id="phone-input" maxlength="10" inputmode="numeric" placeholder="98765 43210" class="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-3 text-base font-medium"/>
+    </div>
+    <button onclick="sendOtp()" class="w-full bg-brand-600 text-white font-bold text-base py-4 rounded-xl active:scale-[0.98]">Send OTP</button>
+    <div class="flex items-center gap-3 my-6"><div class="flex-1 h-px bg-gray-200"></div><span class="text-xs text-gray-400 font-semibold">OR CONTINUE WITH</span><div class="flex-1 h-px bg-gray-200"></div></div>
+    <div class="grid grid-cols-2 gap-3">
+      <button onclick="socialLogin('Google')" class="bg-white border border-gray-200 rounded-xl py-3 flex items-center justify-center gap-2 active:scale-95"><span class="text-lg">G</span><span class="text-sm font-semibold text-gray-700">Google</span></button>
+      <button onclick="socialLogin('Apple')" class="bg-white border border-gray-200 rounded-xl py-3 flex items-center justify-center gap-2 active:scale-95"><span class="text-lg"></span><span class="text-sm font-semibold text-gray-700">Apple</span></button>
+    </div>
+    <p class="text-[11px] text-gray-400 text-center mt-8 leading-relaxed">By continuing, you agree to our <span class="text-brand-600 font-semibold">Terms</span> and <span class="text-brand-600 font-semibold">Privacy Policy</span>.</p>
+    <button onclick="try{localStorage.setItem('turno-onboarded','1');}catch(e){}goHome()" class="w-full mt-4 text-xs text-gray-400 py-2 active:opacity-60">Skip for Demo →</button>
+  </main>
+</div>
+
+<!-- ============ OTP ============ -->
+<div id="s-otp" class="screen">
+  <header class="bg-white px-5 py-3 flex items-center gap-3"><button onclick="back()" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button></header>
+  <main class="flex-1 px-6 py-4">
+    <h1 class="text-2xl font-extrabold text-gray-900">Verify OTP</h1>
+    <p class="text-sm text-gray-500 mt-2 mb-8">Enter the 6-digit code sent to <span class="font-semibold text-gray-900" id="otp-phone">+91 98765 43210</span></p>
+    <div class="flex justify-between gap-2 mb-6" id="otp-fields"></div>
+    <div class="flex items-center justify-between mb-6">
+      <p class="text-xs text-gray-500">Didn't receive? <button id="resend-btn" onclick="resendOtp()" class="text-gray-300 font-semibold" disabled>Resend in <span id="otp-timer">30</span>s</button></p>
+    </div>
+    <button onclick="verifyOtp()" class="w-full bg-brand-600 text-white font-bold text-base py-4 rounded-xl active:scale-[0.98]">Verify & Continue</button>
+    <div class="bg-brand-50 rounded-xl p-3 mt-6 flex items-center gap-2"><span class="material-symbols-outlined text-brand-600 text-[18px]">info</span><p class="text-xs text-brand-700">Demo OTP: <b>123456</b> (any 6 digits work)</p></div>
+  </main>
+</div>
+
+<!-- Status bar (shared visually inside each screen header) -->
+
+<!-- ============ HOME ============ -->
+<div id="s-home" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 pt-3 pb-4">
+    <div class="flex justify-between items-start">
+      <div><h1 class="text-xl font-bold text-gray-900" id="home-greeting">Hi, Arun 👋</h1><p class="text-sm text-gray-500 mt-0.5">Good morning! Stay healthy.</p></div>
+      <button onclick="nav('s-notif')" class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center relative active:scale-95"><span class="material-symbols-outlined text-gray-700">notifications</span><span class="absolute top-1.5 right-2 w-2 h-2 bg-red-500 rounded-full"></span></button>
+    </div>
+    <div class="mt-3 flex gap-2 overflow-x-auto hide-scrollbar" id="family-pills"></div>
+    <button onclick="nav('s-search')" class="mt-3 w-full flex items-center bg-gray-100 rounded-xl px-4 py-3 gap-3 active:scale-[0.99]"><span class="material-symbols-outlined text-gray-400 text-[20px]">search</span><span class="text-sm text-gray-400">Search hospitals, doctors, departments...</span></button>
+  </header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-24">
+    <div class="px-5 py-4 space-y-5">
+      <section>
+        <div class="flex justify-between items-center mb-3"><h2 class="text-base font-bold text-gray-900">Upcoming Appointment</h2><button onclick="nav('s-appointments')" class="text-sm font-semibold text-brand-500 active:opacity-60">View All</button></div>
+        <button onclick="nav('s-queue')" class="block w-full text-left bg-white rounded-2xl p-4 shadow-[0_2px_12px_rgba(0,0,0,0.06)] active:scale-[0.98] transition-transform">
+          <div class="flex items-start gap-3"><div class="w-11 h-11 rounded-xl bg-brand-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-brand-600">local_hospital</span></div><div class="flex-1"><h3 class="font-semibold text-gray-900 text-sm">Apollo Hospitals</h3><p class="text-xs text-gray-500">Greams Road, Chennai</p></div></div>
+          <div class="flex items-center gap-3 mt-3"><div class="w-9 h-9 rounded-full bg-brand-100 flex items-center justify-center"><span class="material-symbols-outlined fill text-brand-600 text-[18px]">person</span></div><div><p class="text-sm font-medium text-gray-900">Dr. Karthik R</p><p class="text-xs text-gray-500">Dermatologist</p></div></div>
+          <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+            <div class="flex items-center gap-4"><div><p class="text-xs text-gray-400">Token</p><p class="text-lg font-bold text-gray-900" id="home-token">32</p></div><div class="border-l border-gray-200 pl-4"><p class="text-xs text-gray-400">Today</p><p class="text-sm font-semibold text-gray-900">10:30 AM</p></div></div>
+            <span class="bg-accent-50 text-accent-700 text-xs font-bold px-3 py-1 rounded-full">Confirmed</span>
+          </div>
+        </button>
+      </section>
+      <section>
+        <div class="flex justify-between items-center mb-3"><h2 class="text-base font-bold text-gray-900">Live Queue Summary</h2><button onclick="nav('s-queue')" class="text-sm font-semibold text-brand-500">View All</button></div>
+        <div class="bg-white rounded-2xl p-4 shadow-[0_2px_12px_rgba(0,0,0,0.06)]">
+          <div class="flex items-center justify-between mb-3"><div><h3 class="font-semibold text-gray-900 text-sm">Apollo Hospitals</h3><p class="text-xs text-gray-500">Dermatology OP</p></div><span class="flex items-center gap-1.5 bg-accent-50 text-accent-700 text-xs font-bold px-3 py-1 rounded-full"><span class="w-2 h-2 rounded-full bg-accent-500 live-dot"></span>Live</span></div>
+          <div class="grid grid-cols-2 gap-4 mb-3"><div class="text-center"><p class="text-xs text-gray-400">Current</p><p class="text-2xl font-extrabold text-brand-600" id="home-current">18</p></div><div class="text-center"><p class="text-xs text-gray-400">Your Token</p><p class="text-2xl font-extrabold text-accent-600">32</p></div></div>
+          <p class="text-brand-600 font-bold text-xs mb-3"><span id="home-ahead">14</span> patients ahead of you</p>
+          <button onclick="nav('s-queue')" class="w-full bg-accent-500 text-white font-semibold text-sm py-3 rounded-xl active:scale-[0.98] flex items-center justify-center gap-2">Track Queue <span class="material-symbols-outlined text-[18px]">arrow_forward</span></button>
+        </div>
+      </section>
+      <section>
+        <h2 class="text-base font-bold text-gray-900 mb-3">Quick Actions</h2>
+        <div class="grid grid-cols-4 gap-3">
+          <button onclick="nav('s-book')" class="flex flex-col items-center gap-2 bg-white rounded-2xl py-4 shadow-sm active:scale-95"><div class="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-brand-600 text-[22px]">confirmation_number</span></div><span class="text-[11px] font-medium text-gray-700">Book Token</span></button>
+          <button onclick="nav('s-appointments')" class="flex flex-col items-center gap-2 bg-white rounded-2xl py-4 shadow-sm active:scale-95"><div class="w-10 h-10 rounded-xl bg-accent-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-accent-600 text-[22px]">event_note</span></div><span class="text-[11px] font-medium text-gray-700">My Appts</span></button>
+          <button onclick="nav('s-hospitals')" class="flex flex-col items-center gap-2 bg-white rounded-2xl py-4 shadow-sm active:scale-95"><div class="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-purple-600 text-[22px]">local_hospital</span></div><span class="text-[11px] font-medium text-gray-700">Hospitals</span></button>
+          <button onclick="nav('s-vitals')" class="flex flex-col items-center gap-2 bg-white rounded-2xl py-4 shadow-sm active:scale-95"><div class="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-red-500 text-[22px]">monitor_heart</span></div><span class="text-[11px] font-medium text-gray-700">Vitals</span></button>
+          <button onclick="nav('s-family')" class="flex flex-col items-center gap-2 bg-white rounded-2xl py-4 shadow-sm active:scale-95"><div class="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-pink-600 text-[22px]">group</span></div><span class="text-[11px] font-medium text-gray-700">Family</span></button>
+          <button onclick="nav('s-records')" class="flex flex-col items-center gap-2 bg-white rounded-2xl py-4 shadow-sm active:scale-95"><div class="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-orange-500 text-[22px]">medical_information</span></div><span class="text-[11px] font-medium text-gray-700">Records</span></button>
+          <button onclick="nav('s-pharmacy')" class="flex flex-col items-center gap-2 bg-white rounded-2xl py-4 shadow-sm active:scale-95"><div class="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-green-600 text-[22px]">medication</span></div><span class="text-[11px] font-medium text-gray-700">Pharmacy</span></button>
+          <button onclick="nav('s-lab')" class="flex flex-col items-center gap-2 bg-white rounded-2xl py-4 shadow-sm active:scale-95"><div class="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-indigo-600 text-[22px]">science</span></div><span class="text-[11px] font-medium text-gray-700">Lab Tests</span></button>
+          <button onclick="showTokenQR()" class="flex flex-col items-center gap-2 bg-white rounded-2xl py-4 shadow-sm active:scale-95"><div class="w-10 h-10 rounded-xl bg-cyan-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-cyan-600 text-[22px]">qr_code_2</span></div><span class="text-[11px] font-medium text-gray-700">My Token</span></button>
+          <button onclick="nav('s-settings')" class="flex flex-col items-center gap-2 bg-white rounded-2xl py-4 shadow-sm active:scale-95"><div class="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center"><span class="material-symbols-outlined fill text-gray-600 text-[22px]">settings</span></div><span class="text-[11px] font-medium text-gray-700">Settings</span></button>
+        </div>
+      </section>
+      <section>
+        <h2 class="text-base font-bold text-gray-900 mb-3">Health Tips</h2>
+        <div class="flex gap-3 overflow-x-auto hide-scrollbar -mx-5 px-5">
+          <div class="bg-gradient-to-br from-brand-500 to-brand-700 rounded-2xl p-4 min-w-[240px] text-white"><span class="material-symbols-outlined fill mb-2">water_drop</span><h3 class="font-bold text-sm">Stay Hydrated</h3><p class="text-xs text-brand-100 mt-1">Drink 8 glasses of water daily for better health</p></div>
+          <div class="bg-gradient-to-br from-accent-500 to-accent-700 rounded-2xl p-4 min-w-[240px] text-white"><span class="material-symbols-outlined fill mb-2">directions_run</span><h3 class="font-bold text-sm">30-min Walk</h3><p class="text-xs text-accent-100 mt-1">A daily walk reduces heart disease risk by 30%</p></div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <nav class="absolute bottom-0 w-full z-50 bg-white border-t border-gray-200 flex justify-around items-start px-2 pt-2 pb-safe" data-tabbar="s-home"></nav>
+</div>
+
+<!-- ============ LIVE QUEUE ============ -->
+<div id="s-queue" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center justify-between border-b border-gray-100"><div class="flex items-center gap-3"><button onclick="back()" class="text-gray-700 active:opacity-60"><span class="material-symbols-outlined">arrow_back</span></button><h1 class="text-lg font-bold text-gray-900">Live Queue</h1></div><button onclick="refreshQueue()" class="text-gray-500 active:rotate-180 transition-transform"><span class="material-symbols-outlined">refresh</span></button></header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-24">
+    <div class="mx-5 mt-4 bg-brand-600 rounded-2xl p-4 text-white">
+      <h2 class="font-bold text-base">Apollo Hospitals</h2><p class="text-sm text-brand-200">Greams Road, Chennai</p>
+      <div class="flex items-center justify-between mt-3 pt-3 border-t border-white/20"><div><p class="text-xs text-brand-200">Department</p><p class="text-sm font-semibold">Dermatology OP</p></div><div class="flex items-center gap-2"><div class="text-right"><p class="text-xs text-brand-200">Doctor</p><p class="text-sm font-semibold">Dr. Karthik R</p></div><div class="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center"><span class="material-symbols-outlined fill text-white text-[20px]">person</span></div></div></div>
+    </div>
+    <div class="px-5 mt-5 space-y-5">
+      <div class="grid grid-cols-2 gap-4">
+        <div class="bg-white rounded-2xl p-4 text-center shadow-sm"><p class="text-xs text-gray-400 mb-1">Current Token</p><p class="text-4xl font-extrabold text-brand-600" id="q-current">18</p></div>
+        <div class="bg-white rounded-2xl p-4 text-center shadow-sm"><p class="text-xs text-gray-400 mb-1">Your Token</p><p class="text-4xl font-extrabold text-accent-600">32</p></div>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <p class="text-sm font-bold text-brand-600 mb-3"><span id="q-ahead">14</span> patients ahead of you</p>
+        <div id="q-dots" class="flex flex-wrap gap-1.5"></div>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <p class="text-xs text-gray-400 mb-1">Estimated Consultation Time</p>
+        <p class="text-xl font-bold text-gray-900" id="q-time">10:45 AM – 11:00 AM</p>
+        <p class="text-sm font-semibold text-brand-500 mt-1">(Approx. <span id="q-mins">47</span> mins)</p>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <div class="flex justify-between items-center mb-2"><p class="text-sm font-bold text-gray-900">Queue Progress</p><p class="text-sm font-bold text-brand-600" id="q-pct">56%</p></div>
+        <div class="progress-bar mb-2"><div class="progress-fill" id="q-fill" style="width:56%"></div></div>
+        <div class="flex justify-between text-xs text-gray-400"><span>Token 1</span><span>Token 50</span></div>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <h3 class="text-sm font-bold text-gray-900 mb-3">Live Queue Activity</h3>
+        <div class="space-y-3">
+          <div class="flex items-center gap-3"><span class="w-2 h-2 rounded-full bg-gray-300"></span><span class="text-xs text-gray-400 w-16">10:01 AM</span><span class="bg-gray-100 text-gray-700 text-xs font-bold px-2 py-0.5 rounded">Token 17</span><span class="text-xs text-gray-600">Completed</span></div>
+          <div class="flex items-center gap-3"><span class="w-2 h-2 rounded-full bg-accent-500 live-dot"></span><span class="text-xs text-brand-600 w-16 font-medium">10:11 AM</span><span class="bg-accent-50 text-accent-700 text-xs font-bold px-2 py-0.5 rounded">Token 18</span><span class="text-xs text-accent-700 font-medium">In consultation</span></div>
+          <div class="flex items-center gap-3"><span class="w-2 h-2 rounded-full bg-gray-200"></span><span class="text-xs text-gray-400 w-16">Upcoming</span><span class="bg-gray-100 text-gray-500 text-xs font-bold px-2 py-0.5 rounded">Token 19</span><span class="text-xs text-gray-400">Next in line</span></div>
+        </div>
+      </div>
+      <button onclick="toggleNotif(this)" data-on="0" class="w-full bg-white border-2 border-brand-500 text-brand-600 font-semibold text-sm py-3.5 rounded-xl flex items-center justify-center gap-2 active:scale-[0.98]"><span class="material-symbols-outlined text-[20px]">notifications_active</span><span class="notif-label">Get Notified When It's Near My Turn</span></button>
+      <button onclick="showTokenQR()" class="w-full bg-accent-50 text-accent-700 border-2 border-accent-500 font-semibold text-sm py-3.5 rounded-xl flex items-center justify-center gap-2 active:scale-[0.98]"><span class="material-symbols-outlined text-[20px]">qr_code_2</span>Show My Token QR</button>
+      <button onclick="nav('s-arrival')" class="w-full bg-brand-600 text-white font-semibold text-sm py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-md active:scale-[0.98]"><span class="material-symbols-outlined text-[20px]">directions_car</span>Plan My Arrival</button>
+      <button onclick="openCancelSheet()" class="w-full bg-danger-50 text-danger-600 font-semibold text-sm py-3 rounded-xl active:scale-[0.98]">Cancel Appointment</button>
+    </div>
+  </main>
+  <nav class="absolute bottom-0 w-full z-50 bg-white border-t border-gray-200 flex justify-around items-start px-2 pt-2 pb-safe" data-tabbar="s-queue"></nav>
+</div>
+
+<!-- ============ APPOINTMENTS ============ -->
+<div id="s-appointments" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center gap-3 border-b border-gray-100"><button onclick="back()" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button><h1 class="text-lg font-bold text-gray-900 flex-1">My Appointments</h1><button onclick="nav('s-book')" class="w-9 h-9 rounded-full bg-brand-50 flex items-center justify-center active:scale-95"><span class="material-symbols-outlined text-brand-600 text-[20px]">add</span></button></header>
+  <div class="bg-white px-5 flex border-b border-gray-200">
+    <button onclick="switchAptTab('upcoming')" id="apt-tab-up" class="flex-1 py-3 text-sm tab-active">Upcoming</button>
+    <button onclick="switchAptTab('past')" id="apt-tab-past" class="flex-1 py-3 text-sm font-medium text-gray-400">Past</button>
+  </div>
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-24"><div id="apt-list" class="px-5 py-4 space-y-3"></div></main>
+  <nav class="absolute bottom-0 w-full z-50 bg-white border-t border-gray-200 flex justify-around items-start px-2 pt-2 pb-safe" data-tabbar="s-appointments"></nav>
+</div>
+
+<!-- ============ PROFILE ============ -->
+<div id="s-profile" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center justify-between border-b border-gray-100"><h1 class="text-lg font-bold text-gray-900">Profile</h1><button onclick="nav('s-edit-profile')" class="text-brand-600 text-sm font-semibold active:opacity-60">Edit</button></header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-24">
+    <div class="px-5 py-4 space-y-4">
+      <div class="bg-white rounded-2xl p-5 shadow-sm flex items-center gap-4"><div class="w-16 h-16 rounded-full bg-brand-100 flex items-center justify-center"><span class="material-symbols-outlined fill text-brand-600 text-[32px]">person</span></div><div><h2 class="text-lg font-bold text-gray-900">Arun Kumar</h2><p class="text-sm text-gray-500">+91 98765 43210</p><p class="text-xs text-gray-400 mt-0.5">arun.kumar@email.com</p></div></div>
+      <button onclick="linkAbha()" class="w-full bg-gradient-to-r from-brand-50 to-brand-100 rounded-2xl p-4 flex items-center gap-3 border border-brand-200 active:scale-[0.98]"><div class="w-12 h-12 rounded-full bg-brand-600 flex items-center justify-center text-white"><span class="material-symbols-outlined fill text-[24px]">health_and_safety</span></div><div class="flex-1 text-left"><h3 class="text-sm font-bold text-gray-900">Link ABHA ID</h3><p class="text-xs text-gray-500">Connect Ayushman Bharat Health Account</p></div><span class="material-symbols-outlined text-brand-600">chevron_right</span></button>
+      <div class="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
+        <button onclick="nav('s-family')" class="w-full flex items-center gap-3 px-4 py-3.5 active:bg-gray-50"><span class="material-symbols-outlined text-brand-600">group</span><span class="text-sm font-medium text-gray-900 flex-1 text-left">Family Members</span><span class="bg-brand-100 text-brand-700 text-[10px] font-bold px-2 py-0.5 rounded-full" id="fam-count">4</span><span class="material-symbols-outlined text-gray-300 text-[20px]">chevron_right</span></button>
+        <button onclick="nav('s-vitals')" class="w-full flex items-center gap-3 px-4 py-3.5 active:bg-gray-50"><span class="material-symbols-outlined text-brand-600">monitor_heart</span><span class="text-sm font-medium text-gray-900 flex-1 text-left">Health Dashboard</span><span class="material-symbols-outlined text-gray-300 text-[20px]">chevron_right</span></button>
+        <button onclick="nav('s-records')" class="w-full flex items-center gap-3 px-4 py-3.5 active:bg-gray-50"><span class="material-symbols-outlined text-brand-600">medical_information</span><span class="text-sm font-medium text-gray-900 flex-1 text-left">Health Records</span><span class="material-symbols-outlined text-gray-300 text-[20px]">chevron_right</span></button>
+        <button onclick="nav('s-hospitals')" class="w-full flex items-center gap-3 px-4 py-3.5 active:bg-gray-50"><span class="material-symbols-outlined text-brand-600">favorite</span><span class="text-sm font-medium text-gray-900 flex-1 text-left">Saved Hospitals</span><span class="material-symbols-outlined text-gray-300 text-[20px]">chevron_right</span></button>
+        <button onclick="nav('s-payment')" class="w-full flex items-center gap-3 px-4 py-3.5 active:bg-gray-50"><span class="material-symbols-outlined text-brand-600">account_balance_wallet</span><div class="flex-1 text-left"><span class="text-sm font-medium text-gray-900">Payment Methods</span><span class="text-xs text-gray-400 ml-2">UPI Linked</span></div><span class="material-symbols-outlined text-gray-300 text-[20px]">chevron_right</span></button>
+        <button onclick="nav('s-settings')" class="w-full flex items-center gap-3 px-4 py-3.5 active:bg-gray-50"><span class="material-symbols-outlined text-brand-600">settings</span><span class="text-sm font-medium text-gray-900 flex-1 text-left">Settings & Notifications</span><span class="material-symbols-outlined text-gray-300 text-[20px]">chevron_right</span></button>
+        <button onclick="openLanguageSheet()" class="w-full flex items-center gap-3 px-4 py-3.5 active:bg-gray-50"><span class="material-symbols-outlined text-gray-500">language</span><span class="text-sm font-medium text-gray-900 flex-1 text-left">Language</span><span class="text-sm font-semibold text-brand-600" id="lang-label">English</span><span class="material-symbols-outlined text-gray-300 text-[20px]">chevron_right</span></button>
+      </div>
+      <div class="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
+        <button onclick="nav('s-help')" class="w-full flex items-center gap-3 px-4 py-3.5 active:bg-gray-50"><span class="material-symbols-outlined text-gray-500">help</span><span class="text-sm font-medium text-gray-900 flex-1 text-left">Help &amp; Support</span><span class="material-symbols-outlined text-gray-300 text-[20px]">chevron_right</span></button>
+        <button onclick="nav('s-about')" class="w-full flex items-center gap-3 px-4 py-3.5 active:bg-gray-50"><span class="material-symbols-outlined text-gray-500">info</span><span class="text-sm font-medium text-gray-900 flex-1 text-left">About Turno</span><span class="material-symbols-outlined text-gray-300 text-[20px]">chevron_right</span></button>
+        <button onclick="confirmLogout()" class="w-full flex items-center gap-3 px-4 py-3.5 active:bg-gray-50"><span class="material-symbols-outlined text-red-500">logout</span><span class="text-sm font-medium text-red-500 flex-1 text-left">Log Out</span></button>
+      </div>
+      <p class="text-center text-xs text-gray-400 pt-2">Turno v1.0.0</p>
+    </div>
+  </main>
+  <nav class="absolute bottom-0 w-full z-50 bg-white border-t border-gray-200 flex justify-around items-start px-2 pt-2 pb-safe" data-tabbar="s-profile"></nav>
+</div>
+
+<!-- ============ NOTIFICATIONS ============ -->
+<div id="s-notif" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center gap-3 border-b border-gray-100"><button onclick="back()" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button><h1 class="text-lg font-bold text-gray-900 flex-1">Notifications</h1><button onclick="markAllRead()" class="text-brand-600 text-xs font-semibold active:opacity-60">Mark all read</button></header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar"><div id="notif-list" class="px-5 py-4 space-y-3"></div></main>
+</div>
+
+<!-- ============ HOSPITALS ============ -->
+<div id="s-hospitals" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center gap-3 border-b border-gray-100"><button onclick="back()" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button><h1 class="text-lg font-bold text-gray-900 flex-1">Hospitals Nearby</h1><button onclick="toast('Filter applied','info')" class="text-gray-500"><span class="material-symbols-outlined">tune</span></button></header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar">
+    <div class="px-5 pt-4">
+      <div class="map-wrap" style="height:200px">
+        <div id="map-hosp" style="width:100%;height:100%"></div>
+        <div class="map-overlay" style="left:auto;right:12px;width:auto"><span class="material-symbols-outlined fill text-brand-600 text-[18px]">location_on</span><p class="text-xs font-semibold text-gray-900">5 hospitals near you</p></div>
+      </div>
+    </div>
+    <div id="hosp-list" class="px-5 py-4 space-y-3"></div>
+  </main>
+</div>
+
+<!-- ============ RECORDS ============ -->
+<div id="s-records" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center gap-3 border-b border-gray-100"><button onclick="back()" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button><h1 class="text-lg font-bold text-gray-900 flex-1">Health Records</h1><button onclick="toast('Upload feature coming soon','info')" class="w-9 h-9 rounded-full bg-brand-50 flex items-center justify-center"><span class="material-symbols-outlined text-brand-600 text-[20px]">upload</span></button></header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar"><div id="rec-list" class="px-5 py-4 space-y-3"></div></main>
+</div>
+
+<!-- ============ BOOK ============ -->
+<div id="s-book" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center gap-3 border-b border-gray-100"><button onclick="back()" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button><h1 class="text-lg font-bold text-gray-900">Book Appointment</h1></header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar">
+    <div class="px-5 py-4 space-y-4">
+      <div class="flex items-center bg-white rounded-xl px-4 py-3 gap-3 shadow-sm border border-gray-200"><span class="material-symbols-outlined text-gray-400 text-[20px]">search</span><input id="doc-search" oninput="renderDoctors()" class="flex-1 bg-transparent text-sm text-gray-900 placeholder:text-gray-400" placeholder="Search doctors, departments..."/></div>
+      <div id="spec-chips" class="flex gap-2 overflow-x-auto hide-scrollbar pb-1"></div>
+      <h2 class="text-base font-bold text-gray-900">Available Doctors</h2>
+      <div id="doc-list" class="space-y-3 pb-4"></div>
+    </div>
+  </main>
+</div>
+
+<!-- ============ DOCTOR DETAIL / BOOK CONFIRM ============ -->
+<div id="s-confirm" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center gap-3 border-b border-gray-100"><button onclick="back()" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button><h1 class="text-lg font-bold text-gray-900">Confirm Booking</h1></header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-24"><div id="confirm-body" class="px-5 py-4 space-y-4"></div></main>
+  <div class="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 pb-safe"><button onclick="confirmBooking()" class="w-full bg-brand-600 text-white font-bold text-sm py-4 rounded-xl active:scale-[0.98] flex items-center justify-center gap-2"><span class="material-symbols-outlined">check_circle</span>Confirm & Pay <span id="confirm-fee">₹800</span></button></div>
+</div>
+
+<!-- ============ BOOKING SUCCESS ============ -->
+<div id="s-success" class="screen">
+  <main class="flex-1 flex flex-col items-center justify-center px-8 bg-gradient-to-b from-brand-50 to-white">
+    <div class="w-24 h-24 rounded-full bg-accent-500 flex items-center justify-center mb-6 shadow-lg"><span class="material-symbols-outlined fill text-white" style="font-size:60px">check</span></div>
+    <h1 class="text-2xl font-bold text-gray-900 mb-2">Booking Confirmed!</h1>
+    <p class="text-sm text-gray-500 text-center mb-6">Your token has been booked successfully. We'll notify you as your turn approaches.</p>
+    <div class="w-full bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-6">
+      <div class="flex items-center justify-between mb-3"><span class="text-xs text-gray-400">Token Number</span><span class="text-2xl font-extrabold text-brand-600" id="suc-token">33</span></div>
+      <div class="flex items-center justify-between mb-3"><span class="text-xs text-gray-400">Doctor</span><span class="text-sm font-semibold text-gray-900" id="suc-doc">Dr. Karthik R</span></div>
+      <div class="flex items-center justify-between"><span class="text-xs text-gray-400">Time</span><span class="text-sm font-semibold text-gray-900" id="suc-time">Today, 10:30 AM</span></div>
+    </div>
+    <button onclick="showTokenQR()" class="w-full bg-brand-600 text-white font-bold text-sm py-4 rounded-xl active:scale-[0.98] mb-3 flex items-center justify-center gap-2"><span class="material-symbols-outlined">qr_code_2</span>Show Token QR</button>
+    <button onclick="nav('s-queue')" class="w-full bg-white border border-gray-200 text-gray-700 font-semibold text-sm py-3 rounded-xl active:scale-[0.98] mb-3">Track Live Queue</button>
+    <button onclick="goHome()" class="w-full bg-white border border-gray-200 text-gray-700 font-semibold text-sm py-3 rounded-xl active:scale-[0.98]">Back to Home</button>
+  </main>
+</div>
+
+<!-- ============ SEARCH ============ -->
+<div id="s-search" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center gap-3 border-b border-gray-100">
+    <button onclick="back()" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button>
+    <div class="flex-1 flex items-center bg-gray-100 rounded-xl px-3 py-2 gap-2"><span class="material-symbols-outlined text-gray-400 text-[20px]">search</span><input class="flex-1 bg-transparent text-sm outline-none" placeholder="Search hospitals, doctors..."/></div>
+  </header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar px-5 py-4">
+    <h3 class="text-xs font-bold text-gray-400 uppercase mb-3">Recent Searches</h3>
+    <div class="space-y-2 mb-6">
+      <button onclick="nav('s-book')" class="w-full flex items-center gap-3 py-2 active:opacity-60"><span class="material-symbols-outlined text-gray-400">history</span><span class="text-sm text-gray-700 flex-1 text-left">Dermatologist near me</span></button>
+      <button onclick="nav('s-book')" class="w-full flex items-center gap-3 py-2 active:opacity-60"><span class="material-symbols-outlined text-gray-400">history</span><span class="text-sm text-gray-700 flex-1 text-left">Apollo Hospitals</span></button>
+      <button onclick="nav('s-book')" class="w-full flex items-center gap-3 py-2 active:opacity-60"><span class="material-symbols-outlined text-gray-400">history</span><span class="text-sm text-gray-700 flex-1 text-left">Dr. Karthik R</span></button>
+    </div>
+    <h3 class="text-xs font-bold text-gray-400 uppercase mb-3">Popular Specialties</h3>
+    <div class="grid grid-cols-3 gap-3">
+      <button onclick="nav('s-book')" class="bg-white border border-gray-200 rounded-xl p-3 flex flex-col items-center gap-1 active:scale-95"><span class="material-symbols-outlined text-brand-600">stethoscope</span><span class="text-[11px] font-medium text-gray-700">General</span></button>
+      <button onclick="nav('s-book')" class="bg-white border border-gray-200 rounded-xl p-3 flex flex-col items-center gap-1 active:scale-95"><span class="material-symbols-outlined text-purple-600">dermatology</span><span class="text-[11px] font-medium text-gray-700">Skin</span></button>
+      <button onclick="nav('s-book')" class="bg-white border border-gray-200 rounded-xl p-3 flex flex-col items-center gap-1 active:scale-95"><span class="material-symbols-outlined text-orange-600">dentistry</span><span class="text-[11px] font-medium text-gray-700">Dental</span></button>
+      <button onclick="nav('s-book')" class="bg-white border border-gray-200 rounded-xl p-3 flex flex-col items-center gap-1 active:scale-95"><span class="material-symbols-outlined text-accent-600">pediatrics</span><span class="text-[11px] font-medium text-gray-700">Kids</span></button>
+      <button onclick="nav('s-book')" class="bg-white border border-gray-200 rounded-xl p-3 flex flex-col items-center gap-1 active:scale-95"><span class="material-symbols-outlined text-red-500">cardiology</span><span class="text-[11px] font-medium text-gray-700">Heart</span></button>
+      <button onclick="nav('s-book')" class="bg-white border border-gray-200 rounded-xl p-3 flex flex-col items-center gap-1 active:scale-95"><span class="material-symbols-outlined text-brand-600">visibility</span><span class="text-[11px] font-medium text-gray-700">Eye</span></button>
+    </div>
+  </main>
+</div>
+
+<!-- ============ ARRIVAL PLANNER ============ -->
+<div id="s-arrival" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center gap-3 border-b border-gray-100"><button onclick="back()" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button><h1 class="text-lg font-bold text-gray-900">Arrival Planner</h1></header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-4">
+    <div class="px-5 py-4 space-y-4">
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center justify-between"><div><p class="text-xs text-gray-400">Your Consultation</p><h3 class="font-semibold text-gray-900 text-sm mt-0.5">Apollo Hospitals</h3><p class="text-xs text-gray-500">Dr. Karthik R · Dermatology</p></div><div class="text-right"><p class="text-xs text-gray-400">Token</p><p class="text-2xl font-extrabold text-brand-600">32</p></div></div>
+        <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100"><span class="material-symbols-outlined text-gray-400 text-[18px]">schedule</span><div><p class="text-xs text-gray-400">Estimated Consultation</p><p class="text-sm font-bold text-gray-900">10:45 AM – 11:00 AM</p></div></div>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-3"><h3 class="font-bold text-sm text-gray-900">Route to Hospital</h3><span class="text-xs text-accent-600 font-semibold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-accent-500 live-dot"></span>Live</span></div>
+        <div class="map-wrap" style="height:260px">
+          <div id="map-route" style="width:100%;height:100%"></div>
+          <div class="map-overlay">
+            <span class="material-symbols-outlined fill text-brand-600">directions_car</span>
+            <div class="flex-1"><p class="text-sm font-bold text-gray-900">34 mins · 12.4 km</p><p class="text-[11px] text-gray-500">Fastest route via GST Road</p></div>
+            <button onclick="startNav()" class="bg-brand-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full active:scale-95">Go</button>
+          </div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <h3 class="font-bold text-sm text-gray-900 mb-1">Smart Travel Planner</h3><p class="text-xs text-gray-400 mb-4">Based on live traffic</p>
+        <div class="space-y-3 relative">
+          <div class="absolute left-[11px] top-[20px] bottom-[20px] w-0.5 border-l-2 border-dashed border-gray-300"></div>
+          <div class="flex items-start gap-3 relative z-10"><div class="w-6 h-6 rounded-full bg-brand-600 flex items-center justify-center"><span class="w-2 h-2 rounded-full bg-white"></span></div><div><p class="text-xs text-gray-400">Your Location</p><p class="text-sm font-medium text-gray-900">Velachery, Chennai</p></div></div>
+          <div class="flex items-start gap-3 relative z-10"><div class="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center"><span class="material-symbols-outlined fill text-white text-[14px]">location_on</span></div><div><p class="text-xs text-gray-400">Hospital Location</p><p class="text-sm font-medium text-gray-900">Apollo Hospitals, Greams Road</p></div></div>
+        </div>
+      </div>
+      <div class="bg-white rounded-2xl overflow-hidden shadow-sm border-l-4 border-accent-500">
+        <div class="p-4">
+          <p class="text-xs text-gray-400 mb-1">Recommended Departure</p><p class="text-2xl font-extrabold text-accent-700">Leave in 28 mins</p><p class="text-sm text-gray-600 mt-0.5">at 9:55 AM</p>
+          <div class="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-100"><div><p class="text-xs text-gray-400">Travel</p><p class="text-lg font-bold text-brand-600">34 mins</p></div><div><p class="text-xs text-gray-400">Buffer</p><p class="text-lg font-bold text-accent-600">16 mins</p></div></div>
+        </div>
+        <div class="bg-accent-50 px-4 py-3 flex items-center gap-2"><span class="material-symbols-outlined fill text-accent-600 text-[20px]">check_circle</span><div><p class="text-sm font-semibold text-accent-700">You will reach by 10:29 AM</p><p class="text-xs text-accent-600">Perfect — just in time</p></div></div>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center gap-2 mb-3"><span class="material-symbols-outlined text-red-500 text-[20px]">traffic</span><h3 class="font-bold text-sm text-gray-900">Live Traffic</h3></div>
+        <div class="flex items-center justify-between"><div><p class="text-sm font-semibold text-gray-900">Moderate</p><p class="text-xs text-gray-400">via GST Road</p></div><div class="flex gap-1 items-end"><span class="w-2 h-4 rounded-sm bg-accent-500"></span><span class="w-2 h-5 rounded-sm bg-accent-500"></span><span class="w-2 h-6 rounded-sm bg-warn-400"></span><span class="w-2 h-7 rounded-sm bg-warn-500"></span><span class="w-2 h-8 rounded-sm bg-red-400"></span><span class="w-2 h-6 rounded-sm bg-warn-400"></span><span class="w-2 h-4 rounded-sm bg-accent-500"></span></div></div>
+      </div>
+      <button onclick="startNav()" class="w-full bg-brand-600 text-white font-semibold text-base py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg active:scale-[0.98]"><span class="material-symbols-outlined">navigation</span>Start Navigation</button>
+    </div>
+  </main>
+</div>
+
+<!-- ============ SETTINGS ============ -->
+<div id="s-settings" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center gap-3 border-b border-gray-100"><button onclick="back()" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button><h1 class="text-lg font-bold text-gray-900">Settings & Notifications</h1></header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar">
+    <div class="px-5 py-4 space-y-4">
+      <h3 class="text-xs font-bold text-gray-400 uppercase">Notifications</h3>
+      <div class="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
+        <div class="flex items-center gap-3 px-4 py-3.5"><span class="material-symbols-outlined text-[#25D366]">chat</span><div class="flex-1"><p class="text-sm font-medium text-gray-900">WhatsApp</p><p class="text-xs text-gray-400">Queue updates & reminders</p></div><div class="switch on" onclick="toggleSwitch(this,'whatsapp')"><div class="switch-knob"></div></div></div>
+        <div class="flex items-center gap-3 px-4 py-3.5"><span class="material-symbols-outlined text-brand-600">sms</span><div class="flex-1"><p class="text-sm font-medium text-gray-900">SMS</p><p class="text-xs text-gray-400">Booking confirmations</p></div><div class="switch on" onclick="toggleSwitch(this,'sms')"><div class="switch-knob"></div></div></div>
+        <div class="flex items-center gap-3 px-4 py-3.5"><span class="material-symbols-outlined text-orange-500">mail</span><div class="flex-1"><p class="text-sm font-medium text-gray-900">Email</p><p class="text-xs text-gray-400">Receipts & reports</p></div><div class="switch" onclick="toggleSwitch(this,'email')"><div class="switch-knob"></div></div></div>
+        <div class="flex items-center gap-3 px-4 py-3.5"><span class="material-symbols-outlined text-purple-600">notifications</span><div class="flex-1"><p class="text-sm font-medium text-gray-900">Push Notifications</p><p class="text-xs text-gray-400">Real-time alerts</p></div><div class="switch on" onclick="toggleSwitch(this,'push')"><div class="switch-knob"></div></div></div>
+        <div class="flex items-center gap-3 px-4 py-3.5"><span class="material-symbols-outlined text-gray-700">dark_mode</span><div class="flex-1"><p class="text-sm font-medium text-gray-900">Dark Mode</p><p class="text-xs text-gray-400">Easier on the eyes at night</p></div><div class="switch" id="dark-switch" onclick="toggleDarkSwitch(this)"><div class="switch-knob"></div></div></div>
+      </div>
+      <h3 class="text-xs font-bold text-gray-400 uppercase">Privacy</h3>
+      <div class="bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
+        <button onclick="toast('Opening privacy policy','info')" class="w-full flex items-center gap-3 px-4 py-3.5 active:bg-gray-50"><span class="material-symbols-outlined text-gray-500">lock</span><span class="text-sm font-medium text-gray-900 flex-1 text-left">Privacy Policy</span><span class="material-symbols-outlined text-gray-300 text-[20px]">chevron_right</span></button>
+        <button onclick="toast('Opening terms','info')" class="w-full flex items-center gap-3 px-4 py-3.5 active:bg-gray-50"><span class="material-symbols-outlined text-gray-500">description</span><span class="text-sm font-medium text-gray-900 flex-1 text-left">Terms of Service</span><span class="material-symbols-outlined text-gray-300 text-[20px]">chevron_right</span></button>
+        <button onclick="confirmDelete()" class="w-full flex items-center gap-3 px-4 py-3.5 active:bg-gray-50"><span class="material-symbols-outlined text-red-500">delete</span><span class="text-sm font-medium text-red-500 flex-1 text-left">Delete Account</span></button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ============ PAYMENT ============ -->
+<div id="s-payment" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center gap-3 border-b border-gray-100"><button onclick="back()" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button><h1 class="text-lg font-bold text-gray-900">Payment Methods</h1></header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar">
+    <div class="px-5 py-4 space-y-3">
+      <div class="bg-white rounded-2xl p-4 shadow-sm border-2 border-brand-500">
+        <div class="flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-12 h-12 rounded-xl bg-brand-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-brand-600">account_balance</span></div><div><p class="text-sm font-bold text-gray-900">UPI · GPay</p><p class="text-xs text-gray-500">arun@oksbi</p></div></div><span class="bg-brand-50 text-brand-700 text-xs font-bold px-2 py-1 rounded-full">Default</span></div>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center justify-between"><div class="flex items-center gap-3"><div class="w-12 h-12 rounded-xl bg-orange-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-orange-600">credit_card</span></div><div><p class="text-sm font-bold text-gray-900">HDFC Debit Card</p><p class="text-xs text-gray-500">**** 4521</p></div></div><button onclick="setDefault(this)" class="text-xs font-semibold text-brand-600">Set default</button></div>
+      </div>
+      <button onclick="toast('Add card flow coming soon','info')" class="w-full border-2 border-dashed border-gray-300 rounded-2xl p-4 flex items-center justify-center gap-2 text-gray-500 font-medium text-sm active:bg-gray-50"><span class="material-symbols-outlined">add</span>Add Payment Method</button>
+    </div>
+  </main>
+</div>
+
+<!-- ============ EDIT PROFILE ============ -->
+<div id="s-edit-profile" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center gap-3 border-b border-gray-100"><button onclick="back()" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button><h1 class="text-lg font-bold text-gray-900 flex-1">Edit Profile</h1><button onclick="saveProfile()" class="text-brand-600 text-sm font-semibold">Save</button></header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar">
+    <div class="px-5 py-6 space-y-4">
+      <div class="flex justify-center mb-2"><div class="relative"><div class="w-24 h-24 rounded-full bg-brand-100 flex items-center justify-center"><span class="material-symbols-outlined fill text-brand-600" style="font-size:48px">person</span></div><button class="absolute bottom-0 right-0 w-8 h-8 bg-brand-600 text-white rounded-full flex items-center justify-center shadow-md active:scale-90"><span class="material-symbols-outlined text-[18px]">photo_camera</span></button></div></div>
+      <div><label class="text-xs font-semibold text-gray-500 mb-1 block">Full Name</label><input class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm" value="Arun Kumar"/></div>
+      <div><label class="text-xs font-semibold text-gray-500 mb-1 block">Phone</label><input class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm" value="+91 98765 43210"/></div>
+      <div><label class="text-xs font-semibold text-gray-500 mb-1 block">Email</label><input class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm" value="arun.kumar@email.com"/></div>
+      <div><label class="text-xs font-semibold text-gray-500 mb-1 block">Date of Birth</label><input type="date" class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm" value="1992-08-15"/></div>
+      <div><label class="text-xs font-semibold text-gray-500 mb-1 block">Gender</label><div class="grid grid-cols-3 gap-2"><button class="bg-brand-50 border-2 border-brand-500 text-brand-700 font-semibold text-sm py-2.5 rounded-xl">Male</button><button class="bg-white border border-gray-200 text-gray-700 text-sm py-2.5 rounded-xl">Female</button><button class="bg-white border border-gray-200 text-gray-700 text-sm py-2.5 rounded-xl">Other</button></div></div>
+    </div>
+  </main>
+</div>
+
+<!-- ============ HELP ============ -->
+<div id="s-help" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center gap-3 border-b border-gray-100"><button onclick="back()" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button><h1 class="text-lg font-bold text-gray-900">Help & Support</h1></header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar">
+    <div class="px-5 py-4 space-y-4">
+      <div class="grid grid-cols-2 gap-3">
+        <button onclick="toast('Opening chat','info')" class="bg-white rounded-2xl p-4 flex flex-col items-center gap-2 shadow-sm active:scale-95"><div class="w-12 h-12 rounded-full bg-brand-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-brand-600">chat</span></div><span class="text-sm font-semibold text-gray-900">Live Chat</span><span class="text-xs text-accent-600">● Online</span></button>
+        <button onclick="toast('Dialing 1800-TURNO-1','info')" class="bg-white rounded-2xl p-4 flex flex-col items-center gap-2 shadow-sm active:scale-95"><div class="w-12 h-12 rounded-full bg-accent-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-accent-600">call</span></div><span class="text-sm font-semibold text-gray-900">Call Support</span><span class="text-xs text-gray-400">24×7</span></button>
+      </div>
+      <h3 class="text-xs font-bold text-gray-400 uppercase pt-2">Frequently Asked</h3>
+      <div class="bg-white rounded-2xl shadow-sm divide-y divide-gray-100" id="faq-list"></div>
+    </div>
+  </main>
+</div>
+
+<!-- ============ ABOUT ============ -->
+<div id="s-about" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center gap-3 border-b border-gray-100"><button onclick="back()" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button><h1 class="text-lg font-bold text-gray-900">About Turno</h1></header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar">
+    <div class="px-5 py-8 flex flex-col items-center">
+      <div class="w-20 h-20 rounded-3xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center mb-4 shadow-lg"><span class="material-symbols-outlined fill text-white" style="font-size:48px">queue</span></div>
+      <h2 class="text-2xl font-extrabold text-gray-900">Turno</h2>
+      <p class="text-sm text-gray-500 mb-2">Skip the wait. Save your time.</p>
+      <p class="text-xs text-gray-400">Version 1.0.0 · Build 100</p>
+      <p class="text-sm text-gray-600 text-center mt-6 max-w-xs">Turno helps you book tokens at hospitals near you and track your queue in real-time, so you never have to wait again.</p>
+      <div class="w-full mt-8 bg-white rounded-2xl shadow-sm divide-y divide-gray-100">
+        <button onclick="toast('Opening Twitter','info')" class="w-full flex items-center gap-3 px-4 py-3.5 active:bg-gray-50"><span class="material-symbols-outlined text-brand-500">public</span><span class="text-sm font-medium text-gray-900 flex-1 text-left">Visit Website</span><span class="material-symbols-outlined text-gray-300 text-[20px]">chevron_right</span></button>
+        <button onclick="toast('Rate us on Play Store!','success')" class="w-full flex items-center gap-3 px-4 py-3.5 active:bg-gray-50"><span class="material-symbols-outlined fill text-yellow-500">star</span><span class="text-sm font-medium text-gray-900 flex-1 text-left">Rate Turno</span><span class="material-symbols-outlined text-gray-300 text-[20px]">chevron_right</span></button>
+        <button onclick="toast('Sharing app...','info')" class="w-full flex items-center gap-3 px-4 py-3.5 active:bg-gray-50"><span class="material-symbols-outlined text-accent-600">share</span><span class="text-sm font-medium text-gray-900 flex-1 text-left">Share Turno</span><span class="material-symbols-outlined text-gray-300 text-[20px]">chevron_right</span></button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ============ HOSPITAL DETAIL ============ -->
+<div id="s-hospital-detail" class="screen">
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-24">
+    <div class="hero" id="hd-hero">
+      <button onclick="back()" class="absolute top-4 left-4 z-10 w-10 h-10 rounded-full bg-white/90 backdrop-blur flex items-center justify-center active:scale-95"><span class="material-symbols-outlined text-gray-900">arrow_back</span></button>
+      <div class="absolute top-4 right-4 z-10 flex gap-2">
+        <button onclick="toast('Shared','success')" class="w-10 h-10 rounded-full bg-white/90 backdrop-blur flex items-center justify-center active:scale-95"><span class="material-symbols-outlined text-gray-900 text-[20px]">share</span></button>
+        <button onclick="toggleHospSave()" id="hd-fav" class="w-10 h-10 rounded-full bg-white/90 backdrop-blur flex items-center justify-center active:scale-95"><span class="material-symbols-outlined text-red-500 text-[22px]">favorite</span></button>
+      </div>
+      <div class="absolute bottom-4 left-5 z-10 text-white">
+        <span class="bg-accent-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">Open Now</span>
+        <h2 class="text-2xl font-extrabold mt-2" id="hd-name">Apollo Hospitals</h2>
+        <p class="text-sm text-white/90" id="hd-addr">Greams Road, Chennai · 2.4 km away</p>
+      </div>
+    </div>
+    <div class="px-5 -mt-6 relative z-10">
+      <div class="bg-white rounded-2xl p-4 shadow-md grid grid-cols-3 divide-x divide-gray-100">
+        <div class="text-center"><div class="flex items-center justify-center gap-0.5"><span class="material-symbols-outlined fill text-yellow-500 text-[18px]">star</span><span class="font-bold text-gray-900 text-sm" id="hd-rating">4.7</span></div><p class="text-[10px] text-gray-500 mt-1">128 reviews</p></div>
+        <div class="text-center"><p class="font-bold text-gray-900 text-sm" id="hd-beds">550</p><p class="text-[10px] text-gray-500 mt-1">Beds</p></div>
+        <div class="text-center"><p class="font-bold text-gray-900 text-sm">24×7</p><p class="text-[10px] text-gray-500 mt-1">Emergency</p></div>
+      </div>
+    </div>
+    <div class="px-5 mt-4 grid grid-cols-4 gap-2">
+      <button onclick="nav('s-book')" class="bg-brand-50 rounded-xl py-3 flex flex-col items-center gap-1 active:scale-95"><span class="material-symbols-outlined fill text-brand-600 text-[22px]">confirmation_number</span><span class="text-[10px] font-semibold text-brand-700">Book</span></button>
+      <button onclick="toast('Calling hospital','info')" class="bg-accent-50 rounded-xl py-3 flex flex-col items-center gap-1 active:scale-95"><span class="material-symbols-outlined fill text-accent-600 text-[22px]">call</span><span class="text-[10px] font-semibold text-accent-700">Call</span></button>
+      <button onclick="nav('s-arrival')" class="bg-purple-50 rounded-xl py-3 flex flex-col items-center gap-1 active:scale-95"><span class="material-symbols-outlined fill text-purple-600 text-[22px]">directions</span><span class="text-[10px] font-semibold text-purple-700">Route</span></button>
+      <button onclick="toast('Opening website','info')" class="bg-orange-50 rounded-xl py-3 flex flex-col items-center gap-1 active:scale-95"><span class="material-symbols-outlined fill text-orange-600 text-[22px]">public</span><span class="text-[10px] font-semibold text-orange-700">Web</span></button>
+    </div>
+    <div class="px-5 mt-5 flex gap-2 overflow-x-auto hide-scrollbar pb-1" id="hd-tabs">
+      <button onclick="switchHospTab('about')" class="pill-tab active" data-tab="about">About</button>
+      <button onclick="switchHospTab('depts')" class="pill-tab" data-tab="depts">Departments</button>
+      <button onclick="switchHospTab('docs')" class="pill-tab" data-tab="docs">Doctors</button>
+      <button onclick="switchHospTab('reviews')" class="pill-tab" data-tab="reviews">Reviews</button>
+    </div>
+    <div class="px-5 mt-4" id="hd-content"></div>
+  </main>
+</div>
+
+<!-- ============ DOCTOR DETAIL ============ -->
+<div id="s-doctor-detail" class="screen">
+  <header class="bg-white px-5 py-3 flex items-center justify-between border-b border-gray-100">
+    <div class="flex items-center gap-3"><button onclick="back()" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button><h1 class="text-lg font-bold text-gray-900">Doctor Profile</h1></div>
+    <button onclick="toast('Shared','success')" class="text-gray-500"><span class="material-symbols-outlined">share</span></button>
+  </header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-24"><div id="dd-content" class="px-5 py-4"></div></main>
+  <div class="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 pb-safe flex gap-3"><button onclick="bookDoctorDirect()" class="flex-1 bg-brand-600 text-white font-bold text-sm py-4 rounded-xl active:scale-[0.98] flex items-center justify-center gap-2"><span class="material-symbols-outlined">event_available</span>Book Appointment</button><button onclick="startVideoConsult()" class="w-14 bg-accent-500 text-white rounded-xl active:scale-95 flex items-center justify-center"><span class="material-symbols-outlined fill">videocam</span></button></div>
+</div>
+
+<!-- ============ TOKEN QR ============ -->
+<div id="s-token-qr" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center gap-3 border-b border-gray-100"><button onclick="back()" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button><h1 class="text-lg font-bold text-gray-900 flex-1">Your Token</h1><button onclick="downloadTicket()" class="text-brand-600"><span class="material-symbols-outlined">download</span></button></header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar bg-gradient-to-b from-brand-50 to-white pb-4">
+    <div class="px-6 py-6 flex flex-col items-center">
+      <div class="bg-white rounded-3xl shadow-xl px-6 py-6 flex flex-col items-center w-full max-w-xs">
+        <div class="w-12 h-12 rounded-xl bg-brand-50 flex items-center justify-center mb-3"><span class="material-symbols-outlined fill text-brand-600">local_hospital</span></div>
+        <h3 class="font-bold text-gray-900 text-sm" id="qr-hosp">Apollo Hospitals</h3>
+        <p class="text-xs text-gray-500" id="qr-dept">Dermatology · Dr. Karthik R</p>
+        <div id="qr-canvas" class="my-5"></div>
+        <p class="text-xs text-gray-400 uppercase font-bold">Token Number</p>
+        <p class="text-5xl font-extrabold text-brand-600 mt-1" id="qr-token">32</p>
+        <div class="w-full border-t border-dashed border-gray-200 my-4 relative"><span class="absolute -left-9 -top-3 w-6 h-6 rounded-full bg-brand-50"></span><span class="absolute -right-9 -top-3 w-6 h-6 rounded-full bg-brand-50"></span></div>
+        <div class="grid grid-cols-2 gap-4 w-full text-center">
+          <div><p class="text-[10px] text-gray-400 uppercase">Date</p><p class="text-sm font-semibold text-gray-900" id="qr-date">Today, 24 May</p></div>
+          <div><p class="text-[10px] text-gray-400 uppercase">Time</p><p class="text-sm font-semibold text-gray-900" id="qr-time">10:30 AM</p></div>
+        </div>
+        <p class="text-[10px] text-gray-400 mt-4 text-center">Show this code at the hospital reception</p>
+      </div>
+      <button onclick="checkInNow()" class="w-full max-w-xs mt-5 bg-brand-600 text-white font-bold text-sm py-4 rounded-xl active:scale-[0.98] flex items-center justify-center gap-2"><span class="material-symbols-outlined">qr_code_scanner</span>Check In at Hospital</button>
+      <button onclick="nav('s-queue')" class="w-full max-w-xs mt-2 bg-white border border-gray-200 text-gray-700 font-semibold text-sm py-3 rounded-xl active:scale-[0.98]">View Live Queue</button>
+    </div>
+  </main>
+</div>
+
+<!-- ============ CHECK-IN SUCCESS ============ -->
+<div id="s-checkin" class="screen">
+  <main class="flex-1 flex flex-col items-center justify-center px-8 bg-gradient-to-b from-accent-50 to-white">
+    <div class="w-28 h-28 rounded-full bg-accent-500 flex items-center justify-center mb-6 shadow-2xl"><span class="material-symbols-outlined fill text-white" style="font-size:72px">how_to_reg</span></div>
+    <h1 class="text-2xl font-bold text-gray-900 mb-2">You're Checked In!</h1>
+    <p class="text-sm text-gray-500 text-center mb-6">The reception has been notified. Please take a seat in the waiting area.</p>
+    <div class="w-full bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-6">
+      <div class="flex items-center justify-between mb-2"><span class="text-xs text-gray-400">Token</span><span class="text-2xl font-extrabold text-brand-600">32</span></div>
+      <div class="flex items-center justify-between mb-2"><span class="text-xs text-gray-400">Patients ahead</span><span class="text-sm font-semibold text-gray-900">5</span></div>
+      <div class="flex items-center justify-between"><span class="text-xs text-gray-400">Estimated wait</span><span class="text-sm font-semibold text-accent-600">~15 mins</span></div>
+    </div>
+    <button onclick="nav('s-queue')" class="w-full bg-brand-600 text-white font-bold text-sm py-4 rounded-xl active:scale-[0.98] mb-3">Track Live Queue</button>
+    <button onclick="goHome()" class="w-full bg-white border border-gray-200 text-gray-700 font-semibold text-sm py-3 rounded-xl active:scale-[0.98]">Back to Home</button>
+  </main>
+</div>
+
+<!-- ============ FAMILY MEMBERS ============ -->
+<div id="s-family" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center justify-between border-b border-gray-100"><div class="flex items-center gap-3"><button onclick="back()" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button><h1 class="text-lg font-bold text-gray-900">Family Members</h1></div><button onclick="showAddFamilySheet()" class="bg-brand-600 text-white text-xs font-bold px-3 py-2 rounded-lg active:scale-95 flex items-center gap-1"><span class="material-symbols-outlined text-[16px]">add</span>Add</button></header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-8">
+    <div id="family-list" class="px-5 py-4 space-y-3"></div>
+    <div class="px-5 mt-2"><button onclick="showAddFamilySheet()" class="w-full border-2 border-dashed border-gray-300 rounded-2xl py-5 flex flex-col items-center gap-2 active:scale-[0.98] text-gray-400"><span class="material-symbols-outlined text-[28px]">person_add</span><span class="text-sm font-medium">Add Family Member</span></button></div>
+  </main>
+</div>
+
+<!-- ============ HEALTH VITALS ============ -->
+<div id="s-vitals" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center justify-between border-b border-gray-100"><div class="flex items-center gap-3"><button onclick="back()" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button><h1 class="text-lg font-bold text-gray-900">Health Dashboard</h1></div><button onclick="showLogVitalSheet()" class="bg-brand-600 text-white text-xs font-bold px-3 py-2 rounded-lg active:scale-95 flex items-center gap-1"><span class="material-symbols-outlined text-[16px]">add</span>Log</button></header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-8">
+    <div class="px-5 py-4 space-y-4" id="vitals-content"></div>
+  </main>
+</div>
+
+<!-- ============ VIDEO WAITING ROOM ============ -->
+<div id="s-video-wait" class="screen">
+  <main class="flex-1 flex flex-col items-center justify-center px-8 bg-gradient-to-b from-brand-50 to-white">
+    <div class="w-28 h-28 rounded-full bg-brand-100 flex items-center justify-center mb-5 relative"><span class="material-symbols-outlined fill text-brand-600" style="font-size:56px">videocam</span><span class="absolute inset-0 rounded-full border-4 border-brand-300 animate-ping opacity-30"></span></div>
+    <h1 class="text-xl font-bold text-gray-900 mb-2">Waiting Room</h1>
+    <p class="text-sm text-gray-500 text-center mb-2" id="vw-doc">Dr. Karthik R — Dermatology</p>
+    <p class="text-xs text-gray-400 mb-6">You'll be connected once the doctor is ready</p>
+    <div class="bg-white rounded-2xl p-5 shadow-sm w-full max-w-xs mb-6">
+      <div class="flex items-center justify-between mb-3"><span class="text-xs text-gray-400">Estimated wait</span><span class="text-sm font-bold text-brand-600" id="vw-eta">~2 mins</span></div>
+      <div class="flex items-center justify-between mb-3"><span class="text-xs text-gray-400">Position</span><span class="text-sm font-bold text-gray-900">Next in line</span></div>
+      <div class="flex items-center justify-between"><span class="text-xs text-gray-400">Fee paid</span><span class="text-sm font-bold text-accent-600">₹499</span></div>
+    </div>
+    <div class="flex gap-3 w-full max-w-xs">
+      <button onclick="joinVideoCall()" class="flex-1 bg-brand-600 text-white font-bold text-sm py-4 rounded-xl active:scale-[0.98] flex items-center justify-center gap-2"><span class="material-symbols-outlined">call</span>Join Now</button>
+      <button onclick="back();toast('Cancelled','info')" class="px-5 bg-red-50 text-red-600 font-bold text-sm py-4 rounded-xl active:scale-[0.98]">Cancel</button>
+    </div>
+    <div class="mt-6 flex gap-4">
+      <button class="flex flex-col items-center gap-1 text-gray-400"><span class="material-symbols-outlined text-[20px]">mic</span><span class="text-[10px]">Mic On</span></button>
+      <button class="flex flex-col items-center gap-1 text-gray-400"><span class="material-symbols-outlined text-[20px]">videocam</span><span class="text-[10px]">Cam On</span></button>
+      <button onclick="toast('Testing speaker','info')" class="flex flex-col items-center gap-1 text-gray-400"><span class="material-symbols-outlined text-[20px]">volume_up</span><span class="text-[10px]">Speaker</span></button>
+    </div>
+  </main>
+</div>
+
+<!-- ============ VIDEO CALL ============ -->
+<div id="s-video-call" class="screen">
+  <div class="flex-1 bg-gray-900 relative flex items-center justify-center">
+    <div class="text-center"><div class="w-24 h-24 rounded-full bg-brand-700 flex items-center justify-center mx-auto mb-3"><span class="material-symbols-outlined fill text-white" style="font-size:52px">person</span></div><p class="text-white font-semibold">Dr. Karthik R</p><p class="text-white/60 text-xs mt-1" id="vc-timer">00:00</p></div>
+    <div class="absolute top-4 right-4 w-28 h-36 bg-gray-800 rounded-xl border-2 border-white/20 flex items-center justify-center"><span class="material-symbols-outlined fill text-white/60 text-[32px]">person</span><p class="absolute bottom-2 text-[9px] text-white/60 font-medium">You</p></div>
+    <div class="absolute top-4 left-4 flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span><span class="text-white/70 text-xs font-medium">LIVE</span></div>
+    <div class="absolute bottom-8 left-0 right-0 flex justify-center gap-4">
+      <button onclick="toggleVcBtn(this,'mic_off','mic')" class="w-14 h-14 rounded-full bg-white/10 backdrop-blur flex items-center justify-center active:scale-90"><span class="material-symbols-outlined text-white">mic</span></button>
+      <button onclick="toggleVcBtn(this,'videocam_off','videocam')" class="w-14 h-14 rounded-full bg-white/10 backdrop-blur flex items-center justify-center active:scale-90"><span class="material-symbols-outlined text-white">videocam</span></button>
+      <button onclick="endVideoCall()" class="w-14 h-14 rounded-full bg-red-500 flex items-center justify-center active:scale-90"><span class="material-symbols-outlined fill text-white">call_end</span></button>
+      <button onclick="toast('Chat opened','info')" class="w-14 h-14 rounded-full bg-white/10 backdrop-blur flex items-center justify-center active:scale-90"><span class="material-symbols-outlined text-white">chat</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ PHARMACY ============ -->
+<div id="s-pharmacy" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center justify-between border-b border-gray-100"><div class="flex items-center gap-3"><button onclick="back()" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button><h1 class="text-lg font-bold text-gray-900">Pharmacy</h1></div><button onclick="toast('Cart: 2 items','info')" class="relative text-gray-700"><span class="material-symbols-outlined">shopping_cart</span><span class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[9px] text-white flex items-center justify-center font-bold">2</span></button></header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-24">
+    <div class="px-5 py-4 space-y-4">
+      <button onclick="toast('Upload from gallery','info')" class="w-full bg-brand-50 border-2 border-dashed border-brand-300 rounded-2xl py-5 flex flex-col items-center gap-2 active:scale-[0.98]"><span class="material-symbols-outlined fill text-brand-600 text-[28px]">upload_file</span><span class="text-sm font-semibold text-brand-700">Upload Prescription</span><span class="text-xs text-gray-500">Take photo or select from gallery</span></button>
+      <div class="flex items-center bg-gray-100 rounded-xl px-4 py-3 gap-3"><span class="material-symbols-outlined text-gray-400 text-[20px]">search</span><input class="flex-1 bg-transparent text-sm outline-none" placeholder="Search medicines..." oninput="filterMeds(this.value)"/></div>
+      <h3 class="text-xs font-bold text-gray-400 uppercase">Popular Medicines</h3>
+      <div id="med-list" class="space-y-3"></div>
+      <div class="bg-accent-50 rounded-2xl p-4 flex items-center gap-3"><span class="material-symbols-outlined fill text-accent-600">local_shipping</span><div class="flex-1"><p class="text-sm font-semibold text-gray-900">Free delivery above ₹199</p><p class="text-xs text-gray-500">Delivered within 60 minutes</p></div></div>
+    </div>
+  </main>
+  <div class="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 pb-safe flex items-center justify-between"><div><p class="text-xs text-gray-400">2 items</p><p class="text-base font-bold text-gray-900">₹245</p></div><button onclick="toast('Order placed! Delivering in 45 mins','success')" class="bg-brand-600 text-white font-bold text-sm px-8 py-3.5 rounded-xl active:scale-[0.98]">Place Order</button></div>
+</div>
+
+<!-- ============ LAB TESTS ============ -->
+<div id="s-lab" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span>9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center justify-between border-b border-gray-100"><div class="flex items-center gap-3"><button onclick="back()" class="text-gray-700"><span class="material-symbols-outlined">arrow_back</span></button><h1 class="text-lg font-bold text-gray-900">Lab Tests</h1></div><button onclick="toast('View orders','info')" class="text-brand-600 text-xs font-semibold">My Reports</button></header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-8">
+    <div class="px-5 py-4 space-y-4">
+      <div class="bg-gradient-to-r from-purple-500 to-brand-600 rounded-2xl p-5 text-white"><div class="flex items-center gap-3 mb-3"><span class="material-symbols-outlined fill text-[28px]">home_health</span><div><h3 class="font-bold">Home Sample Collection</h3><p class="text-xs text-white/80">Our phlebotomist visits you at home</p></div></div><button onclick="showLabBookSheet()" class="bg-white text-brand-700 font-bold text-xs px-5 py-2.5 rounded-lg active:scale-95">Book Slot</button></div>
+      <h3 class="text-xs font-bold text-gray-400 uppercase">Popular Packages</h3>
+      <div id="lab-list" class="space-y-3"></div>
+      <h3 class="text-xs font-bold text-gray-400 uppercase">Individual Tests</h3>
+      <div id="lab-tests" class="space-y-2"></div>
+    </div>
+  </main>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="bg-gray-900 text-white text-sm font-medium px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 max-w-[85%]"><span class="material-symbols-outlined fill text-accent-400 text-[20px]" id="toast-icon">check_circle</span><span id="toast-msg">Done</span></div>
+
+<!-- Sheet backdrop & sheet container -->
+<div id="sheet-bd" class="sheet-backdrop" onclick="closeSheet()"></div>
+<div id="sheet-host"></div>
+
+</div>
+
+<script>
+// ============ APP STATE & NAV ============
+const State = {
+  currentToken: 18,
+  yourToken: 32,
+  totalTokens: 50,
+  notif: false,
+  appointments: [
+    {id:1,hospital:'Apollo Hospitals',addr:'Greams Road, Chennai',doctor:'Dr. Karthik R',spec:'Dermatologist',date:'Today, 24 May',time:'10:30 AM',token:32,status:'Confirmed',color:'brand'},
+    {id:2,hospital:'MIOT International',addr:'Manapakkam, Chennai',doctor:'Dr. Anitha Verma',spec:'Physiotherapist',date:'28 May 2025',time:'04:00 PM',token:15,status:'Confirmed',color:'purple'},
+  ],
+  past: [
+    {id:3,hospital:'Fortis Malar',addr:'Adyar, Chennai',doctor:'Dr. Suresh Babu',spec:'Cardiologist',date:'15 May 2025',time:'11:00 AM',token:8,status:'Completed',color:'gray'},
+    {id:4,hospital:'Apollo Hospitals',addr:'Greams Road, Chennai',doctor:'Dr. Karthik R',spec:'Dermatologist',date:'02 May 2025',time:'09:30 AM',token:22,status:'Completed',color:'gray'},
+  ],
+  notifications: [
+    {id:1,icon:'schedule',color:'brand',title:'Your turn is approaching',msg:'5 patients ahead at Apollo Hospitals',time:'2m ago',unread:true},
+    {id:2,icon:'check_circle',color:'accent',title:'Appointment Confirmed',msg:'Dr. Karthik R · 24 May, 10:30 AM',time:'1h ago',unread:true},
+    {id:3,icon:'event',color:'warn',title:'Reminder',msg:'MIOT appointment tomorrow at 4:00 PM',time:'5h ago',unread:false},
+    {id:4,icon:'medical_information',color:'purple',title:'Prescription Ready',msg:'Your prescription has been added',time:'Yesterday',unread:false},
+  ],
+  hospitals: [
+    {name:'Apollo Hospitals',addr:'Greams Road · 2.4 km',rating:4.7,beds:550,saved:true,open:true,color:'brand'},
+    {name:'MIOT International',addr:'Manapakkam · 8.1 km',rating:4.6,beds:1000,saved:true,open:true,color:'purple'},
+    {name:'Fortis Malar',addr:'Adyar · 5.3 km',rating:4.5,beds:180,saved:false,open:true,color:'red'},
+    {name:'SIMS Hospital',addr:'Vadapalani · 6.7 km',rating:4.4,beds:340,saved:false,open:true,color:'orange'},
+    {name:'Kauvery Hospital',addr:'Alwarpet · 3.2 km',rating:4.6,beds:240,saved:false,open:false,color:'accent'},
+  ],
+  records: [
+    {type:'Prescription',doctor:'Dr. Karthik R',date:'02 May 2025',icon:'medication',color:'brand'},
+    {type:'Lab Report',doctor:'Apollo Diagnostics',date:'28 Apr 2025',icon:'science',color:'accent'},
+    {type:'X-Ray Report',doctor:'MIOT Imaging',date:'15 Apr 2025',icon:'radiology',color:'purple'},
+    {type:'Discharge Summary',doctor:'Fortis Malar',date:'10 Mar 2025',icon:'description',color:'orange'},
+  ],
+  doctors: [
+    {name:'Dr. Karthik R',spec:'Dermatologist',exp:'12+ years',fee:800,rating:4.8,reviews:256,avail:'Today',time:'10:30 AM',color:'brand'},
+    {name:'Dr. Madhumitha',spec:'Dermatologist',exp:'8+ years',fee:700,rating:4.7,reviews:198,avail:'Today',time:'11:15 AM',color:'purple'},
+    {name:'Dr. Rajeshwari',spec:'Dermatologist',exp:'10+ years',fee:700,rating:4.6,reviews:143,avail:'Today',time:'12:00 PM',color:'orange'},
+    {name:'Dr. Vignesh K',spec:'General Physician',exp:'15+ years',fee:500,rating:4.9,reviews:412,avail:'Today',time:'09:00 AM',color:'accent'},
+    {name:'Dr. Priya Iyer',spec:'Pediatrician',exp:'9+ years',fee:600,rating:4.8,reviews:287,avail:'Tomorrow',time:'10:00 AM',color:'brand'},
+  ],
+  filter: 'All',
+  settings: {whatsapp:true,sms:true,email:false,push:true,dark:false},
+  language:'English'
+};
+
+let stack=['s-splash'], cur='s-splash';
+const tabs=['s-home','s-appointments','s-queue','s-profile'];
+
+function nav(id, push=true){
+  if(id===cur) return;
+  const el=document.getElementById(id);
+  if(!el){toast('Coming soon','info');return;}
+  document.getElementById(cur).classList.remove('active','fade-up','slide-right');
+  el.classList.add('active');
+  el.classList.add(tabs.includes(id)&&tabs.includes(cur)?'fade-up':'slide-right');
+  if(push) stack.push(id);
+  cur=id;
+  const m=el.querySelector('main'); if(m) m.scrollTop=0;
+  renderTabbar(el);
+  if(id==='s-queue') renderQueue();
+  if(id==='s-appointments') renderAppointments();
+  if(id==='s-notif') renderNotifications();
+  if(id==='s-hospitals') renderHospitals();
+  if(id==='s-records') renderRecords();
+  if(id==='s-hospitals') setTimeout(initHospMap,80);
+  if(id==='s-book') renderDoctors();
+  if(id==='s-home') renderFamilyPills();
+  if(id==='s-family') renderFamilyList();
+  if(id==='s-vitals') renderVitals();
+  if(id==='s-pharmacy') renderMeds();
+  if(id==='s-lab') renderLab();
+  if(id==='s-arrival') setTimeout(initRouteMap,80);
+  if(id==='s-settings') setTimeout(()=>{const d=document.getElementById('dark-switch');if(d)d.classList.toggle('on',document.body.classList.contains('dark'));},50);
+  if(id==='s-search') setTimeout(()=>{const s=el.querySelector('input');if(s)s.focus();},100);
+}
+function back(){
+  if(stack.length>1){stack.pop();const p=stack[stack.length-1];document.getElementById(cur).classList.remove('active','fade-up','slide-right');const n=document.getElementById(p);n.classList.add('active','fade-up');cur=p;renderTabbar(n);}
+}
+function renderTabbar(el){
+  const bar=el.querySelector('[data-tabbar]'); if(!bar) return;
+  const items=[{id:'s-home',i:'home',l:'Home'},{id:'s-appointments',i:'event_note',l:'Appointments'},{id:'s-queue',i:'format_list_numbered',l:'Queue'},{id:'s-profile',i:'person',l:'Profile'}];
+  bar.innerHTML=items.map(t=>{const a=t.id===cur;return `<button onclick="nav('${t.id}')" class="flex flex-col items-center gap-0.5 px-3 py-1 active:opacity-60"><span class="material-symbols-outlined ${a?'fill text-brand-600':'text-gray-400'} text-[24px]">${t.i}</span><span class="text-[11px] ${a?'font-semibold text-brand-600':'font-medium text-gray-400'}">${t.l}</span></button>`;}).join('');
+}
+
+// ============ TOAST ============
+let toastT;
+function toast(msg, type='success'){
+  const el=document.getElementById('toast'), ic=document.getElementById('toast-icon'), m=document.getElementById('toast-msg');
+  m.textContent=msg;
+  const map={success:['check_circle','text-accent-400'],info:['info','text-brand-400'],warn:['warning','text-warn-400'],error:['error','text-danger-500']};
+  const [icon,color]=map[type]||map.success;
+  ic.textContent=icon; ic.className='material-symbols-outlined fill text-[20px] '+color;
+  el.classList.add('show');
+  clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),2200);
+}
+
+// ============ SHEETS ============
+function openSheet(html){
+  document.getElementById('sheet-host').innerHTML=`<div class="sheet">${html}</div>`;
+  document.getElementById('sheet-bd').classList.add('show');
+}
+function closeSheet(){
+  document.getElementById('sheet-bd').classList.remove('show');
+  document.getElementById('sheet-host').innerHTML='';
+}
+
+function openCancelSheet(){
+  openSheet(`<div class="p-5">
+    <div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4"></div>
+    <h3 class="text-lg font-bold text-gray-900 mb-1">Cancel Appointment?</h3>
+    <p class="text-sm text-gray-500 mb-5">Your token will be released and refund will be processed in 3-5 days.</p>
+    <div class="flex gap-3">
+      <button onclick="closeSheet()" class="flex-1 py-3 rounded-xl bg-gray-100 font-semibold text-sm text-gray-700 active:scale-[0.98]">Keep</button>
+      <button onclick="confirmCancel()" class="flex-1 py-3 rounded-xl bg-danger-500 text-white font-semibold text-sm active:scale-[0.98]">Cancel Appt</button>
+    </div></div>`);
+}
+function confirmCancel(){closeSheet();toast('Appointment cancelled','info');setTimeout(()=>nav('s-home'),300);}
+
+// ============ QUEUE ============
+function renderQueue(){
+  const ahead=Math.max(0,State.yourToken-State.currentToken-1);
+  document.getElementById('q-current').textContent=State.currentToken;
+  document.getElementById('q-ahead').textContent=ahead;
+  document.getElementById('home-current')&&(document.getElementById('home-current').textContent=State.currentToken);
+  document.getElementById('home-ahead')&&(document.getElementById('home-ahead').textContent=ahead);
+  const mins=ahead*3+5;
+  document.getElementById('q-mins').textContent=mins;
+  const pct=Math.round((State.currentToken/State.totalTokens)*100);
+  document.getElementById('q-pct').textContent=pct+'%';
+  document.getElementById('q-fill').style.width=pct+'%';
+  const dots=Array.from({length:ahead}).map((_,i)=>{
+    const tone=i<Math.floor(ahead/3)?'100':i<Math.floor(ahead*2/3)?'200':'300';
+    return `<span class="w-6 h-6 rounded-full bg-brand-${tone} flex items-center justify-center"><span class="material-symbols-outlined fill text-brand-600 text-[14px]">person</span></span>`;
+  }).join('');
+  document.getElementById('q-dots').innerHTML=dots;
+}
+function refreshQueue(){
+  if(State.currentToken<State.yourToken){State.currentToken++;renderQueue();toast('Queue updated','info');}
+  else toast("It's your turn!",'success');
+}
+function toggleNotif(btn){
+  const on=btn.dataset.on==='1';
+  btn.dataset.on=on?'0':'1';
+  const lbl=btn.querySelector('.notif-label');
+  if(on){btn.classList.remove('bg-brand-600','text-white');btn.classList.add('bg-white','border-2','border-brand-500','text-brand-600');lbl.textContent="Get Notified When It's Near My Turn";toast('Notifications disabled','info');}
+  else{btn.classList.remove('bg-white','border-2','border-brand-500','text-brand-600');btn.classList.add('bg-brand-600','text-white');lbl.textContent='Notifications Enabled';toast("We'll alert you when you're 3 patients away",'success');}
+}
+
+// ============ APPOINTMENTS ============
+let aptTab='upcoming';
+function switchAptTab(t){
+  aptTab=t;
+  document.getElementById('apt-tab-up').className='flex-1 py-3 text-sm '+(t==='upcoming'?'tab-active':'font-medium text-gray-400');
+  document.getElementById('apt-tab-past').className='flex-1 py-3 text-sm '+(t==='past'?'tab-active':'font-medium text-gray-400');
+  renderAppointments();
+}
+function renderAppointments(){
+  const list=aptTab==='upcoming'?State.appointments:State.past;
+  const el=document.getElementById('apt-list');
+  if(!list.length){el.innerHTML=`<div class="text-center py-12"><span class="material-symbols-outlined text-gray-300" style="font-size:60px">event_busy</span><p class="text-sm text-gray-400 mt-2">No ${aptTab} appointments</p></div>`;return;}
+  el.innerHTML=list.map(a=>{
+    const c=a.color;
+    const status=a.status==='Completed'?'bg-gray-100 text-gray-600':'bg-accent-50 text-accent-700';
+    const action=aptTab==='upcoming'?`<button onclick="nav('s-queue')" class="flex items-center gap-1.5 text-brand-600 font-semibold text-sm active:opacity-60"><span class="material-symbols-outlined fill text-[18px]">play_circle</span>Track Queue<span class="material-symbols-outlined text-[16px]">chevron_right</span></button>`:`<button onclick="toast('Opening report','info')" class="text-brand-600 font-semibold text-sm active:opacity-60">View Report</button>`;
+    return `<div class="bg-white rounded-2xl overflow-hidden shadow-sm">
+      <div class="flex items-center justify-between px-4 pt-4 pb-2"><div class="flex items-center gap-2"><span class="material-symbols-outlined ${a.color==='gray'?'text-gray-400':'fill text-brand-600'} text-[18px]">event</span><span class="text-sm font-bold ${a.color==='gray'?'text-gray-600':'text-brand-600'}">${a.date}</span></div><span class="text-sm font-bold text-brand-600">${a.time}</span></div>
+      <div class="px-4 pb-3">
+        <div class="flex items-start gap-3 mb-3"><div class="w-10 h-10 rounded-xl bg-${c}-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-${c}-600 text-[20px]">local_hospital</span></div><div><h3 class="font-semibold text-gray-900 text-sm">${a.hospital}</h3><p class="text-xs text-gray-500">${a.addr}</p></div></div>
+        <div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full bg-${c}-100 flex items-center justify-center"><span class="material-symbols-outlined fill text-${c}-600 text-[16px]">person</span></div><div class="flex-1"><p class="text-sm font-medium text-gray-900">${a.doctor}</p><p class="text-xs text-gray-500">${a.spec}</p></div><span class="${status} text-xs font-bold px-2.5 py-1 rounded-full">${a.status}</span></div>
+        <div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-100"><div><p class="text-xs text-gray-400">Token</p><p class="text-xl font-extrabold text-gray-900">${a.token}</p></div>${action}</div>
+      </div></div>`;
+  }).join('');
+}
+
+// ============ NOTIFICATIONS ============
+function renderNotifications(){
+  const el=document.getElementById('notif-list');
+  el.innerHTML=State.notifications.map(n=>`<button onclick="readNotif(${n.id})" class="w-full bg-white rounded-2xl p-4 shadow-sm flex items-start gap-3 active:scale-[0.99] text-left ${n.unread?'border-l-4 border-brand-500':''}">
+    <div class="w-10 h-10 rounded-xl bg-${n.color}-50 flex items-center justify-center flex-shrink-0"><span class="material-symbols-outlined fill text-${n.color}-600 text-[20px]">${n.icon}</span></div>
+    <div class="flex-1 min-w-0"><div class="flex items-start justify-between gap-2"><p class="text-sm font-semibold text-gray-900">${n.title}</p>${n.unread?'<span class="w-2 h-2 rounded-full bg-brand-500 mt-1.5"></span>':''}</div><p class="text-xs text-gray-500 mt-0.5">${n.msg}</p><p class="text-[10px] text-gray-400 mt-1.5">${n.time}</p></div>
+  </button>`).join('');
+}
+function readNotif(id){const n=State.notifications.find(x=>x.id===id);if(n){n.unread=false;renderNotifications();}toast('Opening notification','info');}
+function markAllRead(){State.notifications.forEach(n=>n.unread=false);renderNotifications();toast('All marked as read','success');}
+
+// ============ HOSPITALS ============
+function renderHospitals(){
+  document.getElementById('hosp-list').innerHTML=State.hospitals.map((h,i)=>`<div class="bg-white rounded-2xl p-4 shadow-sm" onclick="openHospital(${i})">
+    <div class="flex items-start gap-3"><div class="w-12 h-12 rounded-xl bg-${h.color}-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-${h.color}-600">local_hospital</span></div>
+    <div class="flex-1 min-w-0"><div class="flex items-start justify-between gap-2"><h3 class="font-semibold text-gray-900 text-sm">${h.name}</h3><button onclick="event.stopPropagation();toggleSave(${i})" class="active:scale-90"><span class="material-symbols-outlined ${h.saved?'fill text-red-500':'text-gray-300'} text-[20px]">favorite</span></button></div>
+    <p class="text-xs text-gray-500">${h.addr}</p>
+    <div class="flex items-center gap-3 mt-2 text-xs"><span class="flex items-center gap-0.5 text-gray-600"><span class="material-symbols-outlined fill text-yellow-500 text-[14px]">star</span>${h.rating}</span><span class="text-gray-400">·</span><span class="text-gray-600">${h.beds} beds</span><span class="text-gray-400">·</span><span class="${h.open?'text-accent-600':'text-red-500'} font-medium">${h.open?'Open':'Closed'}</span></div>
+    <div class="flex gap-2 mt-3"><button onclick="event.stopPropagation();nav('s-book')" class="flex-1 bg-brand-600 text-white text-xs font-semibold py-2 rounded-lg active:scale-95">Book Now</button><button onclick="event.stopPropagation();toast('Calling hospital','info')" class="px-3 bg-gray-100 rounded-lg active:scale-95"><span class="material-symbols-outlined text-gray-600 text-[16px]">call</span></button><button onclick="event.stopPropagation();toast('Opening map','info')" class="px-3 bg-gray-100 rounded-lg active:scale-95"><span class="material-symbols-outlined text-gray-600 text-[16px]">directions</span></button></div>
+    </div></div></div>`).join('');
+}
+function toggleSave(i){State.hospitals[i].saved=!State.hospitals[i].saved;renderHospitals();toast(State.hospitals[i].saved?'Added to saved':'Removed from saved','success');}
+
+// ============ HOSPITAL DETAIL ============
+let _hospIdx=0, _hospTab='about';
+const HOSP_DEPTS=[
+  {n:'Cardiology',i:'cardiology',d:14,c:'red'},{n:'Dermatology',i:'dermatology',d:8,c:'orange'},
+  {n:'Pediatrics',i:'pediatrics',d:12,c:'blue'},{n:'Neurology',i:'neurology',d:9,c:'purple'},
+  {n:'Orthopedics',i:'orthopedics',d:11,c:'green'},{n:'ENT',i:'ent',d:6,c:'pink'},
+  {n:'General',i:'stethoscope',d:18,c:'cyan'},{n:'Gynecology',i:'pregnant_woman',d:7,c:'rose'},
+];
+const HOSP_REVIEWS=[
+  {n:'Priya S.',r:5,t:'Excellent service. Token system saved me 2 hours of waiting.',d:'2 days ago'},
+  {n:'Rahul M.',r:4,t:'Clean facility and friendly staff. Parking is limited though.',d:'1 week ago'},
+  {n:'Anjali V.',r:5,t:'Dr. Karthik was very thorough. Highly recommend.',d:'2 weeks ago'},
+];
+function openHospital(i){
+  _hospIdx=i; _hospTab='about';
+  const h=State.hospitals[i];
+  document.getElementById('hd-name').textContent=h.name;
+  document.getElementById('hd-addr').textContent=h.addr;
+  document.getElementById('hd-rating').textContent=h.rating;
+  document.getElementById('hd-beds').textContent=h.beds;
+  document.getElementById('hd-hero').style.background=`linear-gradient(135deg,${h.color==='red'?'#E53935':h.color==='blue'?'#1E88E5':h.color==='green'?'#43A047':h.color==='purple'?'#8E24AA':'#FB8C00'},#1565C0)`;
+  switchHospTab('about');
+  nav('s-hospital-detail');
+}
+function toggleHospSave(){toggleSave(_hospIdx); toast('Updated','success');}
+function switchHospTab(t){
+  _hospTab=t;
+  document.querySelectorAll('#hd-tabs .pill-tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));
+  const c=document.getElementById('hd-content');
+  if(t==='about'){
+    const h=State.hospitals[_hospIdx];
+    c.innerHTML=`<div class="space-y-4">
+      <div class="bg-white rounded-2xl p-4 shadow-sm"><h4 class="text-xs font-bold text-gray-400 uppercase mb-2">About</h4><p class="text-sm text-gray-700 leading-relaxed">${h.name} is a multi-specialty hospital offering world-class healthcare with 24×7 emergency services, advanced diagnostics, and ${h.beds}+ bed capacity.</p></div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm"><h4 class="text-xs font-bold text-gray-400 uppercase mb-3">Facilities</h4><div class="grid grid-cols-4 gap-3">${['ambulance','medication','science','accessible'].map((ic,j)=>`<div class="flex flex-col items-center gap-1"><div class="w-11 h-11 rounded-xl bg-brand-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-brand-600 text-[20px]">${ic}</span></div><span class="text-[10px] text-gray-500">${['Ambulance','Pharmacy','Lab','Disabled'][j]}</span></div>`).join('')}</div></div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm space-y-2"><h4 class="text-xs font-bold text-gray-400 uppercase mb-2">Contact</h4><div class="flex items-center gap-3 text-sm"><span class="material-symbols-outlined text-gray-400 text-[18px]">location_on</span><span class="text-gray-700 flex-1">${h.addr}</span></div><div class="flex items-center gap-3 text-sm"><span class="material-symbols-outlined text-gray-400 text-[18px]">call</span><span class="text-gray-700 flex-1">+91 44 2829 3333</span></div><div class="flex items-center gap-3 text-sm"><span class="material-symbols-outlined text-gray-400 text-[18px]">schedule</span><span class="text-gray-700 flex-1">24×7 Emergency · OPD 8 AM – 8 PM</span></div></div>
+    </div>`;
+  } else if(t==='depts'){
+    c.innerHTML=`<div class="grid grid-cols-2 gap-3">${HOSP_DEPTS.map(d=>`<button onclick="nav('s-book')" class="bg-white rounded-2xl p-3 shadow-sm flex flex-col items-start gap-2 active:scale-95 text-left"><div class="w-10 h-10 rounded-lg bg-${d.c}-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-${d.c}-600 text-[20px]">${d.i}</span></div><div><p class="font-semibold text-gray-900 text-sm">${d.n}</p><p class="text-[11px] text-gray-500">${d.d} doctors</p></div></button>`).join('')}</div>`;
+  } else if(t==='docs'){
+    c.innerHTML=`<div class="space-y-3">${State.doctors.slice(0,6).map(d=>`<button onclick='openDoctor(${JSON.stringify(d)})' class="w-full bg-white rounded-2xl p-3 shadow-sm flex items-center gap-3 active:scale-[0.98] text-left"><div class="w-12 h-12 rounded-full bg-${d.color}-100 flex items-center justify-center"><span class="material-symbols-outlined fill text-${d.color}-600">person</span></div><div class="flex-1"><p class="font-semibold text-gray-900 text-sm">${d.name}</p><p class="text-xs text-gray-500">${d.spec}</p><p class="text-[11px] text-accent-600 mt-0.5">Next: ${d.avail} ${d.time}</p></div><span class="text-sm font-bold text-brand-600">₹${d.fee}</span></button>`).join('')}</div>`;
+  } else {
+    c.innerHTML=`<div class="bg-white rounded-2xl p-4 shadow-sm mb-3 flex items-center gap-4"><div class="text-center"><p class="text-4xl font-extrabold text-gray-900">${State.hospitals[_hospIdx].rating}</p><div class="review-stars text-sm">★★★★★</div><p class="text-[11px] text-gray-400 mt-1">128 reviews</p></div><div class="flex-1 space-y-1">${[5,4,3,2,1].map(s=>`<div class="flex items-center gap-2 text-xs"><span class="w-2 text-gray-500">${s}</span><div class="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-yellow-400" style="width:${[78,15,4,2,1][5-s]}%"></div></div></div>`).join('')}</div></div><div class="space-y-3">${HOSP_REVIEWS.map(r=>`<div class="bg-white rounded-2xl p-4 shadow-sm"><div class="flex items-center justify-between mb-1"><div class="flex items-center gap-2"><div class="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-xs font-bold text-brand-700">${r.n[0]}</div><div><p class="text-sm font-semibold text-gray-900">${r.n}</p><p class="text-[10px] text-gray-400">${r.d}</p></div></div><div class="review-stars text-xs">${'★'.repeat(r.r)}${'☆'.repeat(5-r.r)}</div></div><p class="text-xs text-gray-600 mt-2 leading-relaxed">${r.t}</p></div>`).join('')}</div>`;
+  }
+}
+
+// ============ DOCTOR DETAIL ============
+let _doctor=null;
+function openDoctor(d){
+  _doctor=d;
+  const slots=['9:00','9:30','10:00','10:30','11:00','11:30','12:00','3:00','3:30','4:00','4:30','5:00'];
+  const days=['Mon','Tue','Wed','Thu','Fri','Sat'];
+  document.getElementById('dd-content').innerHTML=`
+    <div class="bg-white rounded-2xl p-5 shadow-sm flex items-center gap-4">
+      <div class="w-20 h-20 rounded-full bg-${d.color}-100 flex items-center justify-center"><span class="material-symbols-outlined fill text-${d.color}-600" style="font-size:48px">person</span></div>
+      <div class="flex-1"><h2 class="font-bold text-gray-900 text-base">${d.name}</h2><p class="text-xs text-gray-500">${d.spec}</p><p class="text-xs text-gray-400 mt-0.5">MBBS, MD · ${d.exp}</p><div class="flex items-center gap-1 mt-1.5"><span class="material-symbols-outlined fill text-yellow-500 text-[14px]">star</span><span class="text-xs font-semibold text-gray-900">${d.rating}</span><span class="text-[11px] text-gray-400">(${d.reviews} reviews)</span></div></div>
+    </div>
+    <div class="grid grid-cols-3 gap-2 mt-4">
+      <div class="bg-white rounded-xl p-3 text-center shadow-sm"><p class="text-base font-bold text-brand-600">${d.exp.match(/\d+/)?.[0]||10}+</p><p class="text-[10px] text-gray-500">Years exp</p></div>
+      <div class="bg-white rounded-xl p-3 text-center shadow-sm"><p class="text-base font-bold text-accent-600">${d.reviews}</p><p class="text-[10px] text-gray-500">Patients</p></div>
+      <div class="bg-white rounded-xl p-3 text-center shadow-sm"><p class="text-base font-bold text-purple-600">${d.rating}★</p><p class="text-[10px] text-gray-500">Rating</p></div>
+    </div>
+    <div class="bg-white rounded-2xl p-4 shadow-sm mt-4"><h4 class="text-xs font-bold text-gray-400 uppercase mb-2">About</h4><p class="text-sm text-gray-700 leading-relaxed">${d.name} is a renowned ${d.spec.toLowerCase()} with extensive expertise in modern treatment approaches. Known for patient-first care and clear communication.</p></div>
+    <div class="bg-white rounded-2xl p-4 shadow-sm mt-4"><h4 class="text-xs font-bold text-gray-400 uppercase mb-3">Available Slots — Today</h4><div class="grid grid-cols-4 gap-2">${slots.map(s=>`<button onclick="quickBookSlot('${s}')" class="text-xs font-semibold py-2 rounded-lg border border-brand-200 text-brand-700 bg-brand-50 active:scale-95">${s}</button>`).join('')}</div></div>
+    <div class="bg-white rounded-2xl p-4 shadow-sm mt-4"><h4 class="text-xs font-bold text-gray-400 uppercase mb-3">Weekly Schedule</h4><div class="grid grid-cols-6 gap-1 text-center text-[10px]">${days.map(dy=>`<div class="text-gray-500 font-semibold">${dy}</div>`).join('')}${days.map(()=>`<div class="bg-accent-50 text-accent-700 py-2 rounded text-[10px] font-semibold">9-1<br>3-7</div>`).join('')}</div></div>
+    <div class="bg-white rounded-2xl p-4 shadow-sm mt-4"><h4 class="text-xs font-bold text-gray-400 uppercase mb-3">Patient Reviews</h4><div class="space-y-3">${HOSP_REVIEWS.slice(0,2).map(r=>`<div class="border-b border-gray-100 pb-3 last:border-0 last:pb-0"><div class="flex items-center justify-between mb-1"><p class="text-sm font-semibold text-gray-900">${r.n}</p><div class="review-stars text-xs">${'★'.repeat(r.r)}</div></div><p class="text-xs text-gray-600">${r.t}</p></div>`).join('')}</div></div>
+    <div class="bg-brand-50 rounded-2xl p-4 mt-4 flex items-center justify-between"><div><p class="text-xs text-brand-700">Consultation fee</p><p class="text-2xl font-extrabold text-brand-700">₹${d.fee}</p></div><div class="text-right"><p class="text-xs text-gray-500">Next slot</p><p class="text-sm font-semibold text-accent-600">${d.avail} ${d.time}</p></div></div>
+  `;
+  nav('s-doctor-detail');
+}
+function quickBookSlot(s){toast('Slot '+s+' selected','success'); if(_doctor) openConfirm(_doctor);}
+function bookDoctorDirect(){if(_doctor) openConfirm(_doctor);}
+function startVideoConsult(){toast('Video consult starting...','info');}
+
+// ============ TOKEN QR ============
+function makeQRSvg(seed){
+  // pseudo-random QR-looking grid (visual only)
+  const size=21; let s=0; for(let i=0;i<seed.length;i++) s=(s*31+seed.charCodeAt(i))>>>0;
+  const rand=()=>{s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff;};
+  let cells=[];
+  for(let y=0;y<size;y++){const row=[]; for(let x=0;x<size;x++) row.push(rand()>0.55?1:0); cells.push(row);}
+  // finder patterns at 3 corners
+  const setFinder=(ox,oy)=>{for(let y=0;y<7;y++) for(let x=0;x<7;x++){const onb=(x===0||x===6||y===0||y===6||(x>=2&&x<=4&&y>=2&&y<=4))?1:0; cells[oy+y][ox+x]=onb;}};
+  setFinder(0,0); setFinder(size-7,0); setFinder(0,size-7);
+  const cellPx=220/(size+2); const off=cellPx; let rects='';
+  for(let y=0;y<size;y++) for(let x=0;x<size;x++) if(cells[y][x]) rects+=`<rect x="${off+x*cellPx}" y="${off+y*cellPx}" width="${cellPx+0.5}" height="${cellPx+0.5}" fill="#0F0F10"/>`;
+  return `<svg width="220" height="220" viewBox="0 0 220 220" xmlns="http://www.w3.org/2000/svg"><rect width="220" height="220" fill="white" rx="12"/>${rects}</svg>`;
+}
+function showTokenQR(){
+  document.getElementById('qr-token').textContent=State.yourToken;
+  document.getElementById('qr-hosp').textContent='Apollo Hospitals';
+  document.getElementById('qr-dept').textContent='Dermatology · Dr. Karthik R';
+  const now=new Date(); document.getElementById('qr-date').textContent='Today, '+now.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][now.getMonth()];
+  document.getElementById('qr-time').textContent='10:30 AM';
+  document.getElementById('qr-canvas').innerHTML=makeQRSvg('TURNO-'+State.yourToken+'-APOLLO');
+  nav('s-token-qr');
+}
+function downloadTicket(){toast('Ticket saved to gallery','success');}
+function checkInNow(){nav('s-checkin');}
+
+// ============ FAMILY MEMBERS ============
+const FAMILY=[
+  {id:1,name:'Arun Kumar',rel:'Self',age:28,blood:'O+',icon:'person',color:'brand'},
+  {id:2,name:'Priya Kumar',rel:'Spouse',age:26,blood:'B+',icon:'woman',color:'pink'},
+  {id:3,name:'Ramesh Kumar',rel:'Father',age:56,blood:'A+',icon:'elderly',color:'blue'},
+  {id:4,name:'Meena Kumar',rel:'Mother',age:52,blood:'AB+',icon:'elderly_woman',color:'purple'},
+];
+let _activeFamily=0;
+function renderFamilyPills(){
+  const c=document.getElementById('family-pills');
+  if(!c) return;
+  c.innerHTML=FAMILY.map((f,i)=>`<button onclick="switchFamily(${i})" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap ${i===_activeFamily?'bg-brand-600 text-white':'bg-gray-100 text-gray-700'} active:scale-95"><span class="material-symbols-outlined text-[14px]">${f.icon}</span>${f.name.split(' ')[0]}</button>`).join('');
+}
+function switchFamily(i){
+  _activeFamily=i;
+  renderFamilyPills();
+  document.getElementById('home-greeting').textContent=`Hi, ${FAMILY[i].name.split(' ')[0]} 👋`;
+  toast(`Booking for ${FAMILY[i].name}`,'info');
+}
+function renderFamilyList(){
+  document.getElementById('family-list').innerHTML=FAMILY.map((f,i)=>`<div class="bg-white rounded-2xl p-4 shadow-sm">
+    <div class="flex items-center gap-3">
+      <div class="w-12 h-12 rounded-full bg-${f.color}-100 flex items-center justify-center"><span class="material-symbols-outlined fill text-${f.color}-600">${f.icon}</span></div>
+      <div class="flex-1">
+        <div class="flex items-center gap-2"><h3 class="font-semibold text-gray-900 text-sm">${f.name}</h3>${f.rel==='Self'?'<span class="bg-brand-100 text-brand-700 text-[10px] font-bold px-2 py-0.5 rounded-full">You</span>':''}</div>
+        <p class="text-xs text-gray-500">${f.rel} · Age ${f.age} · ${f.blood}</p>
+      </div>
+      <div class="flex gap-1">${f.rel!=='Self'?`<button onclick="editFamily(${i})" class="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center active:scale-90"><span class="material-symbols-outlined text-gray-500 text-[16px]">edit</span></button><button onclick="removeFamily(${i})" class="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center active:scale-90"><span class="material-symbols-outlined text-red-500 text-[16px]">delete</span></button>`:''}</div>
+    </div>
+    <div class="flex gap-2 mt-3"><button onclick="switchFamily(${i});goHome()" class="flex-1 text-xs font-semibold py-2 rounded-lg bg-brand-50 text-brand-700 active:scale-95">Book for ${f.name.split(' ')[0]}</button><button onclick="toast('Viewing records','info')" class="px-3 text-xs font-semibold py-2 rounded-lg bg-gray-100 text-gray-700 active:scale-95">Records</button></div>
+  </div>`).join('');
+  const fc=document.getElementById('fam-count'); if(fc) fc.textContent=FAMILY.length;
+}
+function showAddFamilySheet(){
+  openSheet(`<div class="p-5 space-y-4"><h2 class="text-lg font-bold text-gray-900">Add Family Member</h2>
+    <div class="space-y-3">
+      <div><label class="text-xs font-semibold text-gray-500 mb-1 block">Full Name</label><input id="fam-name" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-brand-500" placeholder="Enter name"/></div>
+      <div class="grid grid-cols-2 gap-3"><div><label class="text-xs font-semibold text-gray-500 mb-1 block">Relationship</label><select id="fam-rel" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none"><option>Spouse</option><option>Father</option><option>Mother</option><option>Son</option><option>Daughter</option><option>Sibling</option></select></div><div><label class="text-xs font-semibold text-gray-500 mb-1 block">Age</label><input id="fam-age" type="number" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none" placeholder="25"/></div></div>
+      <div class="grid grid-cols-2 gap-3"><div><label class="text-xs font-semibold text-gray-500 mb-1 block">Blood Group</label><select id="fam-blood" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none"><option>A+</option><option>A-</option><option>B+</option><option>B-</option><option>AB+</option><option>AB-</option><option>O+</option><option>O-</option></select></div><div><label class="text-xs font-semibold text-gray-500 mb-1 block">Gender</label><select id="fam-gender" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none"><option>Male</option><option>Female</option><option>Other</option></select></div></div>
+    </div>
+    <button onclick="addFamilyMember()" class="w-full bg-brand-600 text-white font-bold text-sm py-4 rounded-xl active:scale-[0.98]">Add Member</button>
+  </div>`);
+}
+function addFamilyMember(){
+  const name=document.getElementById('fam-name')?.value;
+  if(!name){toast('Enter name','danger'); return;}
+  FAMILY.push({id:Date.now(),name,rel:document.getElementById('fam-rel').value,age:parseInt(document.getElementById('fam-age').value)||25,blood:document.getElementById('fam-blood').value,icon:document.getElementById('fam-gender').value==='Female'?'woman':'person',color:['pink','blue','purple','orange','cyan'][FAMILY.length%5]});
+  closeSheet();renderFamilyList();renderFamilyPills();toast(`${name} added to family`,'success');
+}
+function removeFamily(i){if(confirm('Remove '+FAMILY[i].name+'?')){FAMILY.splice(i,1);renderFamilyList();renderFamilyPills();toast('Removed','info');}}
+function editFamily(i){toast('Edit form for '+FAMILY[i].name,'info');}
+
+// ============ HEALTH VITALS DASHBOARD ============
+const VITALS={
+  bp:[{d:'May 30',s:122,dia:78},{d:'May 28',s:118,dia:76},{d:'May 25',s:130,dia:82},{d:'May 22',s:125,dia:80},{d:'May 20',s:120,dia:74},{d:'May 18',s:128,dia:79}],
+  weight:[{d:'May 30',v:72.5},{d:'May 23',v:72.8},{d:'May 16',v:73.1},{d:'May 9',v:73.4},{d:'May 2',v:73.8},{d:'Apr 25',v:74.0}],
+  glucose:[{d:'May 30',v:95},{d:'May 27',v:102},{d:'May 24',v:98},{d:'May 21',v:108},{d:'May 18',v:96},{d:'May 15',v:100}],
+  steps:[{d:'Today',v:6842},{d:'Yesterday',v:8210},{d:'May 29',v:5430},{d:'May 28',v:7650},{d:'May 27',v:9100},{d:'May 26',v:4300}]
+};
+function sparkline(data,color,max){
+  const w=120,h=36,pts=data.slice(0,6).reverse();
+  const mn=Math.min(...pts), mx=max||Math.max(...pts), range=mx-mn||1;
+  const coords=pts.map((v,i)=>`${(i/(pts.length-1))*w},${h-((v-mn)/range)*h}`);
+  return `<svg width="${w}" height="${h}" class="block"><polyline points="${coords.join(' ')}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>${coords.map(c=>`<circle cx="${c.split(',')[0]}" cy="${c.split(',')[1]}" r="2.5" fill="${color}"/>`).join('')}</svg>`;
+}
+function renderVitals(){
+  const c=document.getElementById('vitals-content'); if(!c) return;
+  const bpLast=VITALS.bp[0], wLast=VITALS.weight[0], gLast=VITALS.glucose[0], sLast=VITALS.steps[0];
+  c.innerHTML=`
+    <div class="bg-white rounded-2xl p-4 shadow-sm">
+      <div class="flex items-center justify-between mb-3"><div class="flex items-center gap-2"><div class="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-red-500 text-[20px]">favorite</span></div><div><p class="text-sm font-bold text-gray-900">Blood Pressure</p><p class="text-[11px] text-gray-400">${bpLast.d}</p></div></div><span class="bg-green-50 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full">Normal</span></div>
+      <div class="flex items-end justify-between"><div><p class="text-3xl font-extrabold text-gray-900">${bpLast.s}<span class="text-lg text-gray-400">/${bpLast.dia}</span></p><p class="text-xs text-gray-500 mt-1">mmHg</p></div>${sparkline(VITALS.bp.map(v=>v.s),'#EF4444')}</div>
+    </div>
+    <div class="bg-white rounded-2xl p-4 shadow-sm">
+      <div class="flex items-center justify-between mb-3"><div class="flex items-center gap-2"><div class="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-blue-500 text-[20px]">monitor_weight</span></div><div><p class="text-sm font-bold text-gray-900">Weight</p><p class="text-[11px] text-gray-400">${wLast.d}</p></div></div><span class="bg-green-50 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full">\u2193 1.5 kg</span></div>
+      <div class="flex items-end justify-between"><div><p class="text-3xl font-extrabold text-gray-900">${wLast.v}<span class="text-lg text-gray-400"> kg</span></p><p class="text-xs text-gray-500 mt-1">BMI 23.8 (Healthy)</p></div>${sparkline(VITALS.weight.map(v=>v.v),'#3B82F6')}</div>
+    </div>
+    <div class="bg-white rounded-2xl p-4 shadow-sm">
+      <div class="flex items-center justify-between mb-3"><div class="flex items-center gap-2"><div class="w-9 h-9 rounded-lg bg-purple-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-purple-500 text-[20px]">water_drop</span></div><div><p class="text-sm font-bold text-gray-900">Blood Glucose</p><p class="text-[11px] text-gray-400">${gLast.d}</p></div></div><span class="bg-green-50 text-green-700 text-[10px] font-bold px-2 py-0.5 rounded-full">Normal</span></div>
+      <div class="flex items-end justify-between"><div><p class="text-3xl font-extrabold text-gray-900">${gLast.v}<span class="text-lg text-gray-400"> mg/dL</span></p><p class="text-xs text-gray-500 mt-1">Fasting · Target: 70-100</p></div>${sparkline(VITALS.glucose.map(v=>v.v),'#8B5CF6')}</div>
+    </div>
+    <div class="bg-white rounded-2xl p-4 shadow-sm">
+      <div class="flex items-center justify-between mb-3"><div class="flex items-center gap-2"><div class="w-9 h-9 rounded-lg bg-orange-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-orange-500 text-[20px]">directions_walk</span></div><div><p class="text-sm font-bold text-gray-900">Steps</p><p class="text-[11px] text-gray-400">${sLast.d}</p></div></div><span class="${sLast.v>=8000?'bg-green-50 text-green-700':'bg-yellow-50 text-yellow-700'} text-[10px] font-bold px-2 py-0.5 rounded-full">${sLast.v>=8000?'Goal met':'68%'}</span></div>
+      <div class="flex items-end justify-between"><div><p class="text-3xl font-extrabold text-gray-900">${sLast.v.toLocaleString()}</p><p class="text-xs text-gray-500 mt-1">Goal: 10,000 steps</p></div>${sparkline(VITALS.steps.map(v=>v.v),'#F97316',10000)}</div>
+      <div class="mt-3 h-2 bg-gray-100 rounded-full overflow-hidden"><div class="h-full bg-orange-500 rounded-full" style="width:${Math.min(100,sLast.v/100)}%"></div></div>
+    </div>
+    <div class="bg-white rounded-2xl p-4 shadow-sm">
+      <h4 class="text-xs font-bold text-gray-400 uppercase mb-3">Recent Logs</h4>
+      <div class="space-y-2">
+        ${VITALS.bp.slice(0,4).map(v=>`<div class="flex items-center justify-between py-1.5 border-b border-gray-50 last:border-0"><div class="flex items-center gap-2"><span class="material-symbols-outlined text-red-400 text-[16px]">favorite</span><span class="text-xs text-gray-500">${v.d}</span></div><span class="text-xs font-semibold text-gray-900">${v.s}/${v.dia} mmHg</span></div>`).join('')}
+      </div>
+    </div>
+  `;
+}
+function showLogVitalSheet(){
+  openSheet(`<div class="p-5 space-y-4"><h2 class="text-lg font-bold text-gray-900">Log Vital</h2>
+    <div class="grid grid-cols-2 gap-3">
+      <button onclick="logVital('bp')" class="bg-red-50 rounded-xl py-5 flex flex-col items-center gap-2 active:scale-95"><span class="material-symbols-outlined fill text-red-500">favorite</span><span class="text-xs font-semibold text-gray-700">Blood Pressure</span></button>
+      <button onclick="logVital('weight')" class="bg-blue-50 rounded-xl py-5 flex flex-col items-center gap-2 active:scale-95"><span class="material-symbols-outlined fill text-blue-500">monitor_weight</span><span class="text-xs font-semibold text-gray-700">Weight</span></button>
+      <button onclick="logVital('glucose')" class="bg-purple-50 rounded-xl py-5 flex flex-col items-center gap-2 active:scale-95"><span class="material-symbols-outlined fill text-purple-500">water_drop</span><span class="text-xs font-semibold text-gray-700">Glucose</span></button>
+      <button onclick="logVital('steps')" class="bg-orange-50 rounded-xl py-5 flex flex-col items-center gap-2 active:scale-95"><span class="material-symbols-outlined fill text-orange-500">directions_walk</span><span class="text-xs font-semibold text-gray-700">Steps</span></button>
+    </div>
+  </div>`);
+}
+function logVital(type){closeSheet();toast(type.charAt(0).toUpperCase()+type.slice(1)+' logged: demo value','success');}
+
+// ============ VIDEO CONSULTATION ============
+let _vcTimer=null,_vcSecs=0;
+function startVideoConsult(){nav('s-video-wait'); setTimeout(()=>{if(cur==='s-video-wait') document.getElementById('vw-eta').textContent='Doctor is ready!';},3000);}
+function joinVideoCall(){nav('s-video-call');_vcSecs=0;_vcTimer=setInterval(()=>{_vcSecs++;const m=String(Math.floor(_vcSecs/60)).padStart(2,'0'),s=String(_vcSecs%60).padStart(2,'0');const t=document.getElementById('vc-timer');if(t) t.textContent=m+':'+s;},1000);}
+function endVideoCall(){if(_vcTimer){clearInterval(_vcTimer);_vcTimer=null;} back();toast('Call ended · '+Math.floor(_vcSecs/60)+'m '+(_vcSecs%60)+'s','success');}
+function toggleVcBtn(el,offIcon,onIcon){const sp=el.querySelector('span');const isOff=sp.textContent===onIcon;sp.textContent=isOff?offIcon:onIcon;el.classList.toggle('bg-red-500/30',isOff);el.classList.toggle('bg-white/10',!isOff);}
+
+// ============ PHARMACY ============
+const MEDS=[
+  {name:'Dolo 650 (Paracetamol)',desc:'Strip of 15 tablets',price:32,icon:'medication',color:'blue'},
+  {name:'Azithromycin 500mg',desc:'Strip of 3 tablets',price:89,icon:'medication',color:'purple'},
+  {name:'Cetirizine 10mg',desc:'Strip of 10 tablets',price:25,icon:'medication',color:'green'},
+  {name:'Pan D (Pantoprazole)',desc:'Strip of 15 capsules',price:145,icon:'medication',color:'orange'},
+  {name:'Amoxicillin 500mg',desc:'Strip of 10 capsules',price:68,icon:'medication',color:'red'},
+  {name:'Vitamin D3 60K',desc:'Strip of 4 softgels',price:120,icon:'pill',color:'yellow'},
+  {name:'ORS Sachets',desc:'Pack of 5',price:45,icon:'water_drop',color:'cyan'},
+  {name:'Betadine Ointment 20g',desc:'Tube',price:72,icon:'healing',color:'brown'},
+];
+function renderMeds(q=''){
+  const list=q?MEDS.filter(m=>m.name.toLowerCase().includes(q.toLowerCase())):MEDS;
+  document.getElementById('med-list').innerHTML=list.map(m=>`<div class="bg-white rounded-2xl p-3.5 shadow-sm flex items-center gap-3">
+    <div class="w-11 h-11 rounded-xl bg-${m.color}-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-${m.color}-600 text-[20px]">${m.icon}</span></div>
+    <div class="flex-1 min-w-0"><p class="text-sm font-semibold text-gray-900 truncate">${m.name}</p><p class="text-xs text-gray-500">${m.desc}</p></div>
+    <div class="text-right flex-shrink-0"><p class="text-sm font-bold text-gray-900">₹${m.price}</p><button onclick="toast('Added to cart','success')" class="mt-1 text-[10px] font-bold text-brand-600 bg-brand-50 px-2.5 py-1 rounded-md active:scale-95">ADD</button></div>
+  </div>`).join('');
+}
+function filterMeds(v){renderMeds(v);}
+
+// ============ LAB TESTS ============
+const LAB_PKGS=[
+  {name:'Complete Blood Count (CBC)',tests:26,price:299,orig:450,icon:'science',color:'red'},
+  {name:'Full Body Checkup',tests:72,price:999,orig:2500,icon:'health_and_safety',color:'brand'},
+  {name:'Thyroid Profile (T3/T4/TSH)',tests:3,price:349,orig:600,icon:'biotech',color:'purple'},
+  {name:'Diabetes Panel (HbA1c+FBS)',tests:5,price:449,orig:750,icon:'water_drop',color:'orange'},
+];
+const LAB_TESTS=[
+  {name:'Vitamin D (25-OH)',price:599},{name:'Vitamin B12',price:499},{name:'Liver Function (LFT)',price:399},{name:'Kidney Function (KFT)',price:399},{name:'Lipid Profile',price:349},{name:'Urine Routine',price:149},
+];
+function renderLab(){
+  document.getElementById('lab-list').innerHTML=LAB_PKGS.map(p=>`<div class="bg-white rounded-2xl p-4 shadow-sm">
+    <div class="flex items-start gap-3"><div class="w-11 h-11 rounded-xl bg-${p.color}-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-${p.color}-600 text-[20px]">${p.icon}</span></div><div class="flex-1"><h4 class="text-sm font-semibold text-gray-900">${p.name}</h4><p class="text-xs text-gray-500">${p.tests} tests included</p></div><div class="text-right"><p class="text-sm font-bold text-gray-900">₹${p.price}</p><p class="text-[10px] text-gray-400 line-through">₹${p.orig}</p></div></div>
+    <div class="flex gap-2 mt-3"><button onclick="toast('Added to cart','success')" class="flex-1 bg-brand-600 text-white text-xs font-semibold py-2 rounded-lg active:scale-95">Book Now</button><button onclick="toast('Test details','info')" class="px-3 bg-gray-100 text-gray-700 text-xs font-semibold py-2 rounded-lg active:scale-95">Details</button></div>
+  </div>`).join('');
+  document.getElementById('lab-tests').innerHTML=LAB_TESTS.map(t=>`<div class="bg-white rounded-xl p-3 shadow-sm flex items-center justify-between"><div><p class="text-sm font-medium text-gray-900">${t.name}</p></div><div class="flex items-center gap-3"><span class="text-sm font-bold text-gray-900">₹${t.price}</span><button onclick="toast('Added','success')" class="text-[10px] font-bold text-brand-600 bg-brand-50 px-2.5 py-1 rounded-md active:scale-95">ADD</button></div></div>`).join('');
+}
+function showLabBookSheet(){
+  openSheet(`<div class="p-5 space-y-4"><h2 class="text-lg font-bold text-gray-900">Book Home Collection</h2>
+    <div class="space-y-3">
+      <div><label class="text-xs font-semibold text-gray-500 mb-1 block">Select Date</label><div class="flex gap-2 overflow-x-auto hide-scrollbar">${['Today','Tomorrow','Mon 2','Tue 3','Wed 4'].map((d,i)=>`<button onclick="this.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('bg-brand-600','text-white'));this.classList.add('bg-brand-600','text-white')" class="px-4 py-2 rounded-lg border text-xs font-semibold whitespace-nowrap ${i===0?'bg-brand-600 text-white':'border-gray-200 text-gray-700'} active:scale-95">${d}</button>`).join('')}</div></div>
+      <div><label class="text-xs font-semibold text-gray-500 mb-1 block">Select Time</label><div class="grid grid-cols-3 gap-2">${['6-7 AM','7-8 AM','8-9 AM','9-10 AM','10-11 AM','11-12 PM'].map((t,i)=>`<button onclick="this.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('bg-brand-600','text-white'));this.classList.add('bg-brand-600','text-white')" class="px-3 py-2 rounded-lg border text-xs font-semibold ${i===1?'bg-brand-600 text-white':'border-gray-200 text-gray-700'} active:scale-95">${t}</button>`).join('')}</div></div>
+      <div><label class="text-xs font-semibold text-gray-500 mb-1 block">Address</label><div class="flex items-center gap-2 bg-gray-50 rounded-xl px-4 py-3 border border-gray-200"><span class="material-symbols-outlined text-gray-400 text-[18px]">home</span><span class="text-sm text-gray-700 flex-1">42, Velachery Main Road, Chennai</span></div></div>
+    </div>
+    <button onclick="closeSheet();toast('Home collection booked for tomorrow 7-8 AM','success')" class="w-full bg-brand-600 text-white font-bold text-sm py-4 rounded-xl active:scale-[0.98]">Confirm Booking</button>
+  </div>`);
+}
+
+// ============ RECORDS ============
+function renderRecords(){
+  document.getElementById('rec-list').innerHTML=State.records.map(r=>`<button onclick="toast('Opening ${r.type}','info')" class="w-full bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3 active:scale-[0.99] text-left">
+    <div class="w-12 h-12 rounded-xl bg-${r.color}-50 flex items-center justify-center flex-shrink-0"><span class="material-symbols-outlined fill text-${r.color}-600">${r.icon}</span></div>
+    <div class="flex-1"><p class="text-sm font-semibold text-gray-900">${r.type}</p><p class="text-xs text-gray-500">${r.doctor}</p><p class="text-[11px] text-gray-400 mt-0.5">${r.date}</p></div>
+    <span class="material-symbols-outlined text-gray-300">download</span>
+  </button>`).join('');
+}
+
+// ============ BOOK / DOCTORS ============
+const specs=[{n:'All',i:'groups'},{n:'General',i:'stethoscope'},{n:'Dermatologist',i:'dermatology'},{n:'Dental',i:'dentistry'},{n:'Pediatrician',i:'pediatrics'}];
+function renderDoctors(){
+  // chips
+  const chips=document.getElementById('spec-chips');
+  if(chips){
+    chips.innerHTML=specs.map(s=>`<button onclick="setFilter('${s.n}')" class="flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl bg-white border ${State.filter===s.n?'chip-active':'border-gray-200'} min-w-[60px]"><span class="material-symbols-outlined ${State.filter===s.n?'fill text-white':'text-gray-500'} text-[22px]">${s.i}</span><span class="text-[10px] font-medium ${State.filter===s.n?'text-white':'text-gray-500'}">${s.n}</span></button>`).join('');
+  }
+  const q=(document.getElementById('doc-search')?.value||'').toLowerCase();
+  let docs=State.doctors.filter(d=>State.filter==='All'||d.spec.includes(State.filter));
+  if(q) docs=docs.filter(d=>d.name.toLowerCase().includes(q)||d.spec.toLowerCase().includes(q));
+  const list=document.getElementById('doc-list');
+  if(!docs.length){list.innerHTML=`<p class="text-center text-sm text-gray-400 py-8">No doctors found</p>`;return;}
+  list.innerHTML=docs.map((d,i)=>`<div class="w-full bg-white rounded-2xl p-4 shadow-sm">
+    <button onclick='openDoctor(${JSON.stringify(d)})' class="w-full flex items-start gap-3 text-left active:opacity-80"><div class="w-12 h-12 rounded-full bg-${d.color}-100 flex items-center justify-center"><span class="material-symbols-outlined fill text-${d.color}-600 text-[24px]">person</span></div>
+    <div class="flex-1 min-w-0"><h3 class="font-semibold text-gray-900 text-sm">${d.name}</h3><p class="text-xs text-gray-500">${d.spec}</p><p class="text-xs text-gray-400 mt-0.5">${d.exp}</p>
+    <div class="flex items-center gap-3 mt-2"><span class="text-xs font-bold text-gray-900">₹${d.fee}</span><span class="text-xs text-gray-400 flex items-center gap-0.5"><span class="material-symbols-outlined fill text-yellow-500 text-[14px]">star</span>${d.rating} (${d.reviews})</span></div></div>
+    <div class="text-right flex-shrink-0"><p class="text-xs text-gray-400">Next</p><p class="text-xs font-semibold text-accent-600">${d.avail}</p><p class="text-sm font-bold text-brand-600">${d.time}</p></div></button>
+    <div class="flex gap-2 mt-3"><button onclick='openConfirm(${JSON.stringify(d)})' class="flex-1 bg-brand-600 text-white text-xs font-semibold py-2 rounded-lg active:scale-95">Book Slot</button><button onclick='openDoctor(${JSON.stringify(d)})' class="px-4 bg-gray-100 text-gray-700 text-xs font-semibold py-2 rounded-lg active:scale-95">View Profile</button></div>
+    </div>`).join('');
+}
+function setFilter(s){State.filter=s;renderDoctors();}
+
+let pendingBooking=null;
+function openConfirm(d){
+  pendingBooking=d;
+  document.getElementById('confirm-fee').textContent='₹'+d.fee;
+  document.getElementById('confirm-body').innerHTML=`
+    <div class="bg-white rounded-2xl p-4 shadow-sm"><div class="flex items-start gap-3"><div class="w-14 h-14 rounded-full bg-${d.color}-100 flex items-center justify-center"><span class="material-symbols-outlined fill text-${d.color}-600" style="font-size:32px">person</span></div><div class="flex-1"><h3 class="font-bold text-gray-900">${d.name}</h3><p class="text-xs text-gray-500">${d.spec} · ${d.exp}</p><p class="text-xs text-gray-400 mt-1">Apollo Hospitals · Greams Road</p></div></div></div>
+    <div class="bg-white rounded-2xl p-4 shadow-sm"><h4 class="text-xs font-bold text-gray-400 uppercase mb-3">Select Date</h4><div class="flex gap-2 overflow-x-auto hide-scrollbar pb-1" id="date-picker"></div></div>
+    <div class="bg-white rounded-2xl p-4 shadow-sm"><h4 class="text-xs font-bold text-gray-400 uppercase mb-3">Select Slot</h4><div class="grid grid-cols-3 gap-2" id="slot-picker"></div></div>
+    <div class="bg-white rounded-2xl p-4 shadow-sm space-y-2"><div class="flex justify-between text-sm"><span class="text-gray-500">Consultation Fee</span><span class="text-gray-900 font-medium">₹${d.fee}</span></div><div class="flex justify-between text-sm"><span class="text-gray-500">Booking Fee</span><span class="text-gray-900 font-medium">₹20</span></div><div class="flex justify-between text-sm"><span class="text-accent-600">First-time discount</span><span class="text-accent-600 font-medium">-₹50</span></div><div class="flex justify-between pt-2 border-t border-gray-100"><span class="font-bold text-gray-900">Total</span><span class="font-bold text-brand-600">₹${d.fee-30}</span></div></div>
+  `;
+  // populate date picker
+  const dates=['Today','Tomorrow','Wed 28','Thu 29','Fri 30','Sat 31'];
+  document.getElementById('date-picker').innerHTML=dates.map((dt,i)=>`<button onclick="selDate(this)" class="flex flex-col items-center px-4 py-2.5 rounded-xl ${i===0?'bg-brand-600 text-white':'bg-gray-100 text-gray-700'} min-w-[64px] active:scale-95"><span class="text-[10px] font-medium opacity-80">${i===0?'Today':i===1?'Tom':dt.split(' ')[0]}</span><span class="text-sm font-bold">${i===0?'24':i===1?'25':dt.split(' ')[1]}</span></button>`).join('');
+  const slots=['09:30','10:00','10:30','11:00','11:30','12:00','04:00','04:30','05:00'];
+  document.getElementById('slot-picker').innerHTML=slots.map((s,i)=>`<button onclick="selSlot(this)" class="py-2.5 rounded-lg text-sm font-medium ${i===2?'bg-brand-600 text-white':'bg-gray-100 text-gray-700'} active:scale-95">${s}</button>`).join('');
+  nav('s-confirm');
+}
+function selDate(btn){btn.parentElement.querySelectorAll('button').forEach(b=>b.className='flex flex-col items-center px-4 py-2.5 rounded-xl bg-gray-100 text-gray-700 min-w-[64px] active:scale-95');btn.className='flex flex-col items-center px-4 py-2.5 rounded-xl bg-brand-600 text-white min-w-[64px] active:scale-95';}
+function selSlot(btn){btn.parentElement.querySelectorAll('button').forEach(b=>b.className='py-2.5 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 active:scale-95');btn.className='py-2.5 rounded-lg text-sm font-medium bg-brand-600 text-white active:scale-95';}
+
+function confirmBooking(){
+  if(!pendingBooking) return nav('s-home');
+  const newToken=33;
+  document.getElementById('suc-token').textContent=newToken;
+  document.getElementById('suc-doc').textContent=pendingBooking.name;
+  document.getElementById('suc-time').textContent='Today, 10:30 AM';
+  // Add to appointments
+  State.appointments.unshift({id:Date.now(),hospital:'Apollo Hospitals',addr:'Greams Road, Chennai',doctor:pendingBooking.name,spec:pendingBooking.spec,date:'Today, 24 May',time:'10:30 AM',token:newToken,status:'Confirmed',color:pendingBooking.color});
+  nav('s-success');
+}
+function goHome(){stack=['s-home'];document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active','fade-up','slide-right'));document.getElementById('s-home').classList.add('active','fade-up');cur='s-home';renderTabbar(document.getElementById('s-home'));renderFamilyPills();}
+
+// ============ MISC ACTIONS ============
+function linkAbha(){openSheet(`<div class="p-5"><div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4"></div><h3 class="text-lg font-bold text-gray-900 mb-1">Link ABHA ID</h3><p class="text-sm text-gray-500 mb-4">Enter your 14-digit ABHA number to link your health records.</p><input class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm mb-3" placeholder="XX-XXXX-XXXX-XXXX"/><button onclick="closeSheet();toast('ABHA verification sent','success')" class="w-full bg-brand-600 text-white font-semibold py-3 rounded-xl active:scale-[0.98]">Verify ABHA</button></div>`);}
+function confirmLogout(){openSheet(`<div class="p-5"><div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4"></div><h3 class="text-lg font-bold text-gray-900 mb-1">Log out?</h3><p class="text-sm text-gray-500 mb-5">You'll need to sign in again to book appointments.</p><div class="flex gap-3"><button onclick="closeSheet()" class="flex-1 py-3 rounded-xl bg-gray-100 font-semibold text-sm text-gray-700">Cancel</button><button onclick="closeSheet();toast('Logged out','info')" class="flex-1 py-3 rounded-xl bg-danger-500 text-white font-semibold text-sm">Log Out</button></div></div>`);}
+function confirmDelete(){openSheet(`<div class="p-5"><div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4"></div><h3 class="text-lg font-bold text-red-600 mb-1">Delete Account?</h3><p class="text-sm text-gray-500 mb-5">This action is irreversible. All your data including health records will be permanently deleted.</p><div class="flex gap-3"><button onclick="closeSheet()" class="flex-1 py-3 rounded-xl bg-gray-100 font-semibold text-sm text-gray-700">Cancel</button><button onclick="closeSheet();toast('Delete request submitted','warn')" class="flex-1 py-3 rounded-xl bg-danger-500 text-white font-semibold text-sm">Delete</button></div></div>`);}
+function openLanguageSheet(){
+  const langs=['English','हिन्दी','தமிழ்','తెలుగు','ಕನ್ನಡ','മലയാളം','বাংলা','मराठी'];
+  openSheet(`<div class="p-5"><div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-4"></div><h3 class="text-lg font-bold text-gray-900 mb-3">Select Language</h3><div class="space-y-1">${langs.map(l=>`<button onclick="setLang('${l}')" class="w-full flex items-center justify-between py-3 px-1 active:bg-gray-50 rounded-lg"><span class="text-sm font-medium text-gray-900">${l}</span>${l===State.language?'<span class="material-symbols-outlined fill text-brand-600">check_circle</span>':''}</button>`).join('')}</div></div>`);
+}
+function setLang(l){State.language=l;document.getElementById('lang-label').textContent=l;closeSheet();toast('Language set to '+l,'success');}
+function toggleSwitch(el,key){const on=el.classList.toggle('on');State.settings[key]=on;toast((key.charAt(0).toUpperCase()+key.slice(1))+(on?' enabled':' disabled'),on?'success':'info');}
+function toggleDarkSwitch(el){const on=el.classList.toggle('on');setTheme(on);toast(on?'Dark mode on':'Light mode on',on?'success':'info');}
+function setDefault(btn){document.querySelectorAll('#s-payment .border-2.border-brand-500').forEach(c=>c.classList.remove('border-2','border-brand-500'));btn.closest('.bg-white').classList.add('border-2','border-brand-500');toast('Default payment updated','success');btn.textContent='Default';btn.classList.remove('text-brand-600');btn.classList.add('text-accent-600');}
+function saveProfile(){toast('Profile saved','success');back();}
+function startNav(){toast('Opening Google Maps','info');}
+
+// ============ ONBOARDING / LOGIN ============
+let onbIdx=1, otpTimer=null;
+function onbNext(){
+  if(onbIdx<3){
+    document.getElementById('onb-'+onbIdx).classList.remove('active');
+    document.getElementById('dot-'+onbIdx).classList.remove('active');
+    onbIdx++;
+    document.getElementById('onb-'+onbIdx).classList.add('active');
+    document.getElementById('dot-'+onbIdx).classList.add('active');
+    if(onbIdx===3) document.getElementById('onb-btn').innerHTML='Get Started <span class="material-symbols-outlined">arrow_forward</span>';
+  } else nav('s-login');
+}
+function sendOtp(){
+  const v=document.getElementById('phone-input').value.trim();
+  if(v.length<10){toast('Enter valid 10-digit number','warn');return;}
+  document.getElementById('otp-phone').textContent='+91 '+v.slice(0,5)+' '+v.slice(5);
+  // build OTP fields
+  const f=document.getElementById('otp-fields');
+  f.innerHTML=Array.from({length:6}).map((_,i)=>`<input class="otp-input" maxlength="1" inputmode="numeric" data-i="${i}" oninput="otpHop(this)" onkeydown="otpBack(event,this)"/>`).join('');
+  nav('s-otp');
+  setTimeout(()=>document.querySelector('.otp-input').focus(),300);
+  startOtpTimer();
+  toast('OTP sent to +91 '+v,'success');
+}
+function otpHop(el){if(el.value&&el.nextElementSibling)el.nextElementSibling.focus();}
+function otpBack(e,el){if(e.key==='Backspace'&&!el.value&&el.previousElementSibling)el.previousElementSibling.focus();}
+function startOtpTimer(){
+  let t=30;
+  const tEl=document.getElementById('otp-timer'), bEl=document.getElementById('resend-btn');
+  bEl.disabled=true; bEl.className='text-gray-300 font-semibold';
+  clearInterval(otpTimer);
+  otpTimer=setInterval(()=>{t--;tEl.textContent=t;if(t<=0){clearInterval(otpTimer);bEl.disabled=false;bEl.className='text-brand-600 font-semibold';bEl.innerHTML='Resend OTP';}},1000);
+}
+function resendOtp(){startOtpTimer();toast('OTP resent','info');}
+function verifyOtp(){
+  const code=Array.from(document.querySelectorAll('.otp-input')).map(i=>i.value).join('');
+  if(code.length<6){toast('Enter complete OTP','warn');return;}
+  try{localStorage.setItem('turno-onboarded','1');}catch(e){}
+  toast('Welcome to Turno!','success');
+  setTimeout(()=>goHome(),400);
+}
+function socialLogin(p){toast('Signing in with '+p+'...','info');try{localStorage.setItem('turno-onboarded','1');}catch(e){}setTimeout(()=>goHome(),800);}
+
+// ============ DARK MODE ============
+function setTheme(dark){
+  document.body.classList.toggle('dark',dark);
+  State.settings.dark=dark;
+  try{localStorage.setItem('turno-dark',dark?'1':'0');}catch(e){}
+  // refresh maps if visible
+  if(routeMap)setTimeout(()=>routeMap.invalidateSize(),50);
+  if(hospMap)setTimeout(()=>hospMap.invalidateSize(),50);
+}
+
+// FAQ
+const faqs=[
+  {q:'How does Turno work?',a:'Book a token at any partner hospital. Track your queue in real-time and get notified when your turn approaches.'},
+  {q:'Can I cancel my appointment?',a:'Yes, you can cancel up to 1 hour before your slot. Full refund will be processed in 3-5 business days.'},
+  {q:'Is my health data secure?',a:'Yes. We are ABDM-compliant and use end-to-end encryption for all your medical records.'},
+  {q:'Do you charge a booking fee?',a:'A small ₹20 booking fee is added. First-time users get ₹50 off automatically.'},
+  {q:'How accurate is queue tracking?',a:'Our AI predicts wait times within ±5 mins accuracy using historical data and live updates from clinics.'},
+];
+function renderFaq(){
+  document.getElementById('faq-list').innerHTML=faqs.map((f,i)=>`<div><button onclick="toggleFaq(${i})" class="w-full flex items-center justify-between gap-3 px-4 py-3.5 active:bg-gray-50 text-left"><span class="text-sm font-medium text-gray-900 flex-1">${f.q}</span><span class="material-symbols-outlined text-gray-400 text-[20px] faq-chev" id="chev-${i}">expand_more</span></button><div id="faq-${i}" class="hidden px-4 pb-3 text-xs text-gray-600 leading-relaxed">${f.a}</div></div>`).join('');
+}
+function toggleFaq(i){const el=document.getElementById('faq-'+i);const ch=document.getElementById('chev-'+i);el.classList.toggle('hidden');ch.style.transform=el.classList.contains('hidden')?'':'rotate(180deg)';}
+
+// ============ INIT ============
+// === LEAFLET MAPS ===
+let routeMap=null, hospMap=null, carMarker=null, carTimer=null;
+
+function makeYouIcon(){return L.divIcon({className:'',iconSize:[24,24],iconAnchor:[12,12],html:'<div class="pin-you"></div>'});}
+function makeHospIcon(color){return L.divIcon({className:'',iconSize:[34,42],iconAnchor:[17,40],popupAnchor:[0,-36],html:`<div class="pin-hosp"><svg viewBox="0 0 34 42"><path d="M17 1 C8 1 2 8 2 16 C2 28 17 41 17 41 C17 41 32 28 32 16 C32 8 26 1 17 1 Z" fill="${color}" stroke="white" stroke-width="2"/></svg><span>local_hospital</span></div>`});}
+function makeCarIcon(){return L.divIcon({className:'',iconSize:[28,28],iconAnchor:[14,14],html:'<div style="width:28px;height:28px;background:white;border:3px solid #1565C0;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,0,.35)"><span class="material-symbols-outlined fill" style="font-size:16px;color:#1565C0">directions_car</span></div>'});}
+
+// Chennai coords
+const ORIGIN=[12.9759,80.2206];           // Velachery
+const DEST=[13.0635,80.2487];             // Apollo Greams Road
+const ROUTE=[
+  [12.9759,80.2206],[12.9810,80.2218],[12.9882,80.2240],[12.9945,80.2265],
+  [13.0010,80.2290],[13.0085,80.2330],[13.0165,80.2370],[13.0250,80.2410],
+  [13.0340,80.2440],[13.0430,80.2460],[13.0520,80.2475],[13.0590,80.2482],[13.0635,80.2487]
+];
+
+function initRouteMap(){
+  const el=document.getElementById('map-route'); if(!el) return;
+  if(routeMap){routeMap.invalidateSize();return;}
+  routeMap=L.map(el,{zoomControl:true,attributionControl:true,scrollWheelZoom:false}).setView([13.02,80.235],12);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19,attribution:'© OSM, © CARTO',subdomains:'abcd'}).addTo(routeMap);
+  // route casing + line
+  L.polyline(ROUTE,{color:'white',weight:9,opacity:.9,lineCap:'round',lineJoin:'round'}).addTo(routeMap);
+  L.polyline(ROUTE,{color:'#1565C0',weight:5,opacity:1,lineCap:'round',lineJoin:'round'}).addTo(routeMap);
+  // markers
+  L.marker(ORIGIN,{icon:makeYouIcon()}).addTo(routeMap).bindPopup('<b>You</b><br/>Velachery, Chennai');
+  L.marker(DEST,{icon:makeHospIcon('#E53935')}).addTo(routeMap).bindPopup('<b>Apollo Hospitals</b><br/>Greams Road · Token 32');
+  // animated car
+  carMarker=L.marker(ROUTE[0],{icon:makeCarIcon()}).addTo(routeMap);
+  let i=0;
+  clearInterval(carTimer);
+  carTimer=setInterval(()=>{i=(i+1)%ROUTE.length;carMarker.setLatLng(ROUTE[i]);},700);
+  routeMap.fitBounds(L.latLngBounds(ROUTE),{padding:[30,30]});
+}
+
+function initHospMap(){
+  const el=document.getElementById('map-hosp'); if(!el) return;
+  if(hospMap){hospMap.invalidateSize();return;}
+  hospMap=L.map(el,{zoomControl:false,attributionControl:true,scrollWheelZoom:false}).setView([13.02,80.22],12);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19,attribution:'© OSM',subdomains:'abcd'}).addTo(hospMap);
+  L.marker([12.9759,80.2206],{icon:makeYouIcon()}).addTo(hospMap).bindPopup('<b>You are here</b>');
+  const pts=[
+    {ll:[13.0635,80.2487],c:'#1565C0',name:'Apollo Hospitals',addr:'Greams Road · 2.4 km'},
+    {ll:[13.0150,80.1880],c:'#7B1FA2',name:'MIOT International',addr:'Manapakkam · 8.1 km'},
+    {ll:[13.0050,80.2570],c:'#E53935',name:'Fortis Malar',addr:'Adyar · 5.3 km'},
+    {ll:[13.0510,80.2070],c:'#FB8C00',name:'SIMS Hospital',addr:'Vadapalani · 6.7 km'},
+    {ll:[13.0335,80.2540],c:'#43A047',name:'Kauvery Hospital',addr:'Alwarpet · 3.2 km'},
+  ];
+  const group=[];
+  pts.forEach(p=>{const m=L.marker(p.ll,{icon:makeHospIcon(p.c)}).addTo(hospMap).bindPopup(`<b>${p.name}</b><br/>${p.addr}<br/><span style="color:#1565C0;font-weight:600">Tap card to book</span>`);group.push(m.getLatLng());});
+  group.push(L.latLng(12.9759,80.2206));
+  hospMap.fitBounds(L.latLngBounds(group),{padding:[24,24]});
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  // restore theme
+  try{if(localStorage.getItem('turno-dark')==='1')document.body.classList.add('dark');}catch(e){}
+  // If already onboarded, skip to home directly
+  try{
+    if(localStorage.getItem('turno-onboarded')==='1'){
+      document.getElementById('s-splash').classList.remove('active','fade-up');
+      document.getElementById('s-home').classList.add('active','fade-up');
+      cur='s-home'; stack=['s-home'];
+      renderTabbar(document.getElementById('s-home'));
+      renderFamilyPills();
+      renderFaq();
+      setInterval(()=>{if(cur==='s-queue'&&State.currentToken<State.yourToken-1&&Math.random()<0.4){State.currentToken++;renderQueue();}},6000);
+      if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+      return;
+    }
+  }catch(e){}
+  // splash → onboarding auto-advance
+  setTimeout(()=>{if(cur==='s-splash')nav('s-onboarding');},1800);
+  renderFaq();
+  // Simulate queue advancing live
+  setInterval(()=>{if(cur==='s-queue'&&State.currentToken<State.yourToken-1&&Math.random()<0.4){State.currentToken++;renderQueue();}},6000);
+  // Register Service Worker
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+});
+</script>
+</body>
+</html>
