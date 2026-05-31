@@ -12,8 +12,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCkSh4grY-ffqSKkrxgPmOKzO_mehFsxlI&libraries=places&callback=Function.prototype" async defer></script>
 <script>
 tailwind.config={darkMode:'class',theme:{extend:{colors:{
 brand:{50:'#e3f2fd',100:'#bbdefb',200:'#90caf9',300:'#64b5f6',400:'#42a5f5',500:'#1E88E5',600:'#1565C0',700:'#0D47A1',800:'#0a3d8f',900:'#082e6b'},
@@ -74,12 +73,9 @@ input:focus,textarea:focus{outline:none;border-color:#1E88E5}
 .map-controls{position:absolute;right:10px;top:10px;display:flex;flex-direction:column;gap:6px}
 .map-ctrl{width:34px;height:34px;background:white;border-radius:8px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.15);cursor:pointer}
 .map-ctrl:active{transform:scale(.92)}
-/* ===== Leaflet customizations ===== */
-.leaflet-container{font-family:'Inter',sans-serif;background:#EAF1F8}
-.leaflet-control-attribution{font-size:9px !important;background:rgba(255,255,255,.7) !important}
-.leaflet-popup-content-wrapper{border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.18);padding:2px}
-.leaflet-popup-content{margin:10px 12px;font-size:12px;line-height:1.35}
-.leaflet-popup-tip{box-shadow:0 4px 10px rgba(0,0,0,.1)}
+/* ===== Google Maps customizations ===== */
+.gm-style{font-family:'Inter',sans-serif}
+.gm-style .gm-style-iw{border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.18);padding:6px 10px;font-size:12px;line-height:1.35}
 .pin-you{position:relative;width:24px;height:24px}
 .pin-you::before{content:'';position:absolute;inset:-10px;border-radius:50%;background:#1E88E5;opacity:.25;animation:pulse2 1.8s ease-in-out infinite}
 .pin-you::after{content:'';position:absolute;inset:4px;border-radius:50%;background:#1565C0;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,.3)}
@@ -113,7 +109,7 @@ body.dark .bg-yellow-50{background-color:rgba(245,158,11,.15) !important}
 body.dark .shadow-sm,body.dark .shadow-md,body.dark .shadow-lg{box-shadow:0 1px 3px rgba(0,0,0,.6) !important}
 body.dark input,body.dark textarea{background:#2C2C2E !important;color:#F5F5F7 !important;border-color:#3A3A3C !important}
 body.dark .switch{background:#3A3A3C}
-body.dark .leaflet-container{background:#1C1C1E}
+body.dark .gm-style{background:#1C1C1E}
 body.dark .map-overlay{background:#2C2C2E;color:#F5F5F7}
 body.dark .map-overlay p{color:#F5F5F7 !important}
 body.dark .map-ctrl{background:#2C2C2E}
@@ -314,8 +310,8 @@ body.dark .skeleton{background:linear-gradient(90deg,#374151 25%,#4B5563 50%,#37
   <header class="bg-white px-5 py-3 flex items-center justify-between border-b border-gray-100"><div class="flex items-center gap-3"><button onclick="back()" class="text-gray-700 active:opacity-60"><span class="material-symbols-outlined">arrow_back</span></button><h1 class="text-lg font-bold text-gray-900">Live Queue</h1></div><button onclick="refreshQueue()" class="text-gray-500 active:rotate-180 transition-transform"><span class="material-symbols-outlined">refresh</span></button></header>
   <main class="flex-1 overflow-y-auto hide-scrollbar pb-24">
     <div class="mx-5 mt-4 bg-brand-600 rounded-2xl p-4 text-white">
-      <h2 class="font-bold text-base">Apollo Hospitals</h2><p class="text-sm text-brand-200">Greams Road, Chennai</p>
-      <div class="flex items-center justify-between mt-3 pt-3 border-t border-white/20"><div><p class="text-xs text-brand-200">Department</p><p class="text-sm font-semibold">Dermatology OP</p></div><div class="flex items-center gap-2"><div class="text-right"><p class="text-xs text-brand-200">Doctor</p><p class="text-sm font-semibold">Dr. Karthik R</p></div><div class="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center"><span class="material-symbols-outlined fill text-white text-[20px]">person</span></div></div></div>
+      <h2 class="font-bold text-base" id="q-hosp">Apollo Hospitals</h2><p class="text-sm text-brand-200" id="q-loc">Greams Road, Chennai</p>
+      <div class="flex items-center justify-between mt-3 pt-3 border-t border-white/20"><div><p class="text-xs text-brand-200">Department</p><p class="text-sm font-semibold" id="q-dept">Dermatology OP</p></div><div class="flex items-center gap-2"><div class="text-right"><p class="text-xs text-brand-200">Doctor</p><p class="text-sm font-semibold" id="q-doc">Dr. Karthik R</p></div><div class="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center"><span class="material-symbols-outlined fill text-white text-[20px]">person</span></div></div></div>
     </div>
     <div class="px-5 mt-5 space-y-5">
       <div class="grid grid-cols-2 gap-4">
@@ -494,7 +490,7 @@ body.dark .skeleton{background:linear-gradient(90deg,#374151 25%,#4B5563 50%,#37
   <main class="flex-1 overflow-y-auto hide-scrollbar pb-4">
     <div class="px-5 py-4 space-y-4">
       <div class="bg-white rounded-2xl p-4 shadow-sm">
-        <div class="flex items-center justify-between"><div><p class="text-xs text-gray-400">Your Consultation</p><h3 class="font-semibold text-gray-900 text-sm mt-0.5">Apollo Hospitals</h3><p class="text-xs text-gray-500">Dr. Karthik R · Dermatology</p></div><div class="text-right"><p class="text-xs text-gray-400">Token</p><p class="text-2xl font-extrabold text-brand-600">32</p></div></div>
+        <div class="flex items-center justify-between"><div><p class="text-xs text-gray-400">Your Consultation</p><h3 class="font-semibold text-gray-900 text-sm mt-0.5" id="ap-hosp">Apollo Hospitals</h3><p class="text-xs text-gray-500" id="ap-doc">Dr. Karthik R · Dermatology</p></div><div class="text-right"><p class="text-xs text-gray-400">Token</p><p class="text-2xl font-extrabold text-brand-600">32</p></div></div>
         <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100"><span class="material-symbols-outlined text-gray-400 text-[18px]">schedule</span><div><p class="text-xs text-gray-400">Estimated Consultation</p><p class="text-sm font-bold text-gray-900">10:45 AM – 11:00 AM</p></div></div>
       </div>
       <div class="bg-white rounded-2xl p-4 shadow-sm">
@@ -503,7 +499,7 @@ body.dark .skeleton{background:linear-gradient(90deg,#374151 25%,#4B5563 50%,#37
           <div id="map-route" style="width:100%;height:100%"></div>
           <div class="map-overlay">
             <span class="material-symbols-outlined fill text-brand-600">directions_car</span>
-            <div class="flex-1"><p class="text-sm font-bold text-gray-900">34 mins · 12.4 km</p><p class="text-[11px] text-gray-500">Fastest route via GST Road</p></div>
+            <div class="flex-1"><p class="text-sm font-bold text-gray-900" id="ap-eta">34 mins · 12.4 km</p><p class="text-[11px] text-gray-500" id="ap-route">Fastest route via GST Road</p></div>
             <button onclick="startNav()" class="bg-brand-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full active:scale-95">Go</button>
           </div>
         </div>
@@ -512,8 +508,8 @@ body.dark .skeleton{background:linear-gradient(90deg,#374151 25%,#4B5563 50%,#37
         <h3 class="font-bold text-sm text-gray-900 mb-1">Smart Travel Planner</h3><p class="text-xs text-gray-400 mb-4">Based on live traffic</p>
         <div class="space-y-3 relative">
           <div class="absolute left-[11px] top-[20px] bottom-[20px] w-0.5 border-l-2 border-dashed border-gray-300"></div>
-          <div class="flex items-start gap-3 relative z-10"><div class="w-6 h-6 rounded-full bg-brand-600 flex items-center justify-center"><span class="w-2 h-2 rounded-full bg-white"></span></div><div><p class="text-xs text-gray-400">Your Location</p><p class="text-sm font-medium text-gray-900">Velachery, Chennai</p></div></div>
-          <div class="flex items-start gap-3 relative z-10"><div class="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center"><span class="material-symbols-outlined fill text-white text-[14px]">location_on</span></div><div><p class="text-xs text-gray-400">Hospital Location</p><p class="text-sm font-medium text-gray-900">Apollo Hospitals, Greams Road</p></div></div>
+          <div class="flex items-start gap-3 relative z-10"><div class="w-6 h-6 rounded-full bg-brand-600 flex items-center justify-center"><span class="w-2 h-2 rounded-full bg-white"></span></div><div><p class="text-xs text-gray-400">Your Location</p><p class="text-sm font-medium text-gray-900" id="tp-origin">Velachery, Chennai</p></div></div>
+          <div class="flex items-start gap-3 relative z-10"><div class="w-6 h-6 rounded-full bg-red-500 flex items-center justify-center"><span class="material-symbols-outlined fill text-white text-[14px]">location_on</span></div><div><p class="text-xs text-gray-400">Hospital Location</p><p class="text-sm font-medium text-gray-900" id="tp-dest">Apollo Hospitals, Greams Road</p></div></div>
         </div>
       </div>
       <div class="bg-white rounded-2xl overflow-hidden shadow-sm border-l-4 border-accent-500">
@@ -525,7 +521,7 @@ body.dark .skeleton{background:linear-gradient(90deg,#374151 25%,#4B5563 50%,#37
       </div>
       <div class="bg-white rounded-2xl p-4 shadow-sm">
         <div class="flex items-center gap-2 mb-3"><span class="material-symbols-outlined text-red-500 text-[20px]">traffic</span><h3 class="font-bold text-sm text-gray-900">Live Traffic</h3></div>
-        <div class="flex items-center justify-between"><div><p class="text-sm font-semibold text-gray-900">Moderate</p><p class="text-xs text-gray-400">via GST Road</p></div><div class="flex gap-1 items-end"><span class="w-2 h-4 rounded-sm bg-accent-500"></span><span class="w-2 h-5 rounded-sm bg-accent-500"></span><span class="w-2 h-6 rounded-sm bg-warn-400"></span><span class="w-2 h-7 rounded-sm bg-warn-500"></span><span class="w-2 h-8 rounded-sm bg-red-400"></span><span class="w-2 h-6 rounded-sm bg-warn-400"></span><span class="w-2 h-4 rounded-sm bg-accent-500"></span></div></div>
+        <div class="flex items-center justify-between"><div><p class="text-sm font-semibold text-gray-900">Moderate</p><p class="text-xs text-gray-400" id="ap-via">via GST Road</p></div><div class="flex gap-1 items-end"><span class="w-2 h-4 rounded-sm bg-accent-500"></span><span class="w-2 h-5 rounded-sm bg-accent-500"></span><span class="w-2 h-6 rounded-sm bg-warn-400"></span><span class="w-2 h-7 rounded-sm bg-warn-500"></span><span class="w-2 h-8 rounded-sm bg-red-400"></span><span class="w-2 h-6 rounded-sm bg-warn-400"></span><span class="w-2 h-4 rounded-sm bg-accent-500"></span></div></div>
       </div>
       <button onclick="startNav()" class="w-full bg-brand-600 text-white font-semibold text-base py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg active:scale-[0.98]"><span class="material-symbols-outlined">navigation</span>Start Navigation</button>
     </div>
@@ -807,6 +803,40 @@ body.dark .skeleton{background:linear-gradient(90deg,#374151 25%,#4B5563 50%,#37
 <!-- Toast -->
 <div id="toast" class="bg-gray-900 text-white text-sm font-medium px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 max-w-[85%]"><span class="material-symbols-outlined fill text-accent-400 text-[20px]" id="toast-icon">check_circle</span><span id="toast-msg">Done</span></div>
 
+<!-- ====== CUSTOMIZATION PANEL ====== -->
+<div id="customize-overlay" style="position:absolute;inset:0;background:rgba(0,0,0,0.6);z-index:500;display:none;align-items:center;justify-content:center;padding:20px">
+  <div style="background:white;border-radius:20px;padding:28px 24px;width:100%;max-width:340px;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+      <div style="width:40px;height:40px;border-radius:12px;background:#e3f2fd;display:flex;align-items:center;justify-content:center"><span class="material-symbols-outlined fill text-brand-600">tune</span></div>
+      <div><h3 style="font-size:16px;font-weight:700;color:#212121;margin:0">Customize Demo</h3><p style="font-size:12px;color:#757575;margin:2px 0 0">Personalize for your pitch</p></div>
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:12px;font-weight:600;color:#616161;display:block;margin-bottom:5px">Doctor Name</label>
+      <input id="cust-doctor" type="text" placeholder="e.g. Dr. Karthik R" style="width:100%;padding:10px 14px;border:1.5px solid #E0E0E0;border-radius:10px;font-size:14px;font-family:Inter,sans-serif;outline:none" onfocus="this.style.borderColor='#1E88E5'" onblur="this.style.borderColor='#E0E0E0'"/>
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:12px;font-weight:600;color:#616161;display:block;margin-bottom:5px">Hospital / Clinic Name</label>
+      <input id="cust-hospital" type="text" placeholder="e.g. Apollo Hospitals" style="width:100%;padding:10px 14px;border:1.5px solid #E0E0E0;border-radius:10px;font-size:14px;font-family:Inter,sans-serif;outline:none" onfocus="this.style.borderColor='#1E88E5'" onblur="this.style.borderColor='#E0E0E0'"/>
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:12px;font-weight:600;color:#616161;display:block;margin-bottom:5px">Department</label>
+      <input id="cust-dept" type="text" placeholder="e.g. Dermatology" style="width:100%;padding:10px 14px;border:1.5px solid #E0E0E0;border-radius:10px;font-size:14px;font-family:Inter,sans-serif;outline:none" onfocus="this.style.borderColor='#1E88E5'" onblur="this.style.borderColor='#E0E0E0'"/>
+    </div>
+    <div style="margin-bottom:20px;position:relative">
+      <label style="font-size:12px;font-weight:600;color:#616161;display:block;margin-bottom:5px">Location</label>
+      <input id="cust-location" type="text" placeholder="Type to search locations..." autocomplete="off" style="width:100%;padding:10px 14px;border:1.5px solid #E0E0E0;border-radius:10px;font-size:14px;font-family:Inter,sans-serif;outline:none" onfocus="this.style.borderColor='#1E88E5'" onblur="setTimeout(()=>{this.style.borderColor='#E0E0E0';document.getElementById('loc-dropdown').style.display='none'},200)" oninput="searchLocations(this.value)"/>
+      <div id="loc-dropdown" style="display:none;position:absolute;left:0;right:0;top:100%;margin-top:4px;background:white;border:1.5px solid #E0E0E0;border-radius:10px;max-height:180px;overflow-y:auto;z-index:600;box-shadow:0 8px 24px rgba(0,0,0,0.12)"></div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button onclick="applyCustomization()" style="flex:1;padding:12px;background:#1565C0;color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;font-family:Inter,sans-serif;cursor:pointer">Apply & Start</button>
+      <button onclick="skipCustomization()" style="padding:12px 16px;background:#F5F5F5;color:#616161;border:none;border-radius:10px;font-size:14px;font-weight:500;font-family:Inter,sans-serif;cursor:pointer">Skip</button>
+    </div>
+  </div>
+</div>
+
+<!-- Customize gear button (always visible) -->
+<button onclick="showCustomizePanel()" id="customize-btn" style="position:absolute;top:44px;right:6px;z-index:400;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.9);border:1px solid #E0E0E0;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.1)"><span class="material-symbols-outlined" style="font-size:18px;color:#616161">settings</span></button>
+
 <!-- Sheet backdrop & sheet container -->
 <div id="sheet-bd" class="sheet-backdrop" onclick="closeSheet()"></div>
 <div id="sheet-host"></div>
@@ -814,6 +844,252 @@ body.dark .skeleton{background:linear-gradient(90deg,#374151 25%,#4B5563 50%,#37
 </div>
 
 <script>
+// ====== CUSTOMIZATION ENGINE ======
+const DEFAULTS = { doctor:'Dr. Karthik R', hospital:'Apollo Hospitals', location:'Greams Road, Chennai', dept:'Dermatology' };
+
+function showCustomizePanel(){
+  const ov = document.getElementById('customize-overlay');
+  ov.style.display='flex';
+  // Pre-fill with saved values
+  try {
+    const saved = JSON.parse(localStorage.getItem('turno-custom') || '{}');
+    document.getElementById('cust-doctor').value = saved.doctor || '';
+    document.getElementById('cust-hospital').value = saved.hospital || '';
+    document.getElementById('cust-location').value = saved.location || '';
+    document.getElementById('cust-dept').value = saved.dept || '';
+  } catch(e){}
+}
+
+function skipCustomization(){
+  document.getElementById('customize-overlay').style.display='none';
+}
+
+function applyCustomization(){
+  const doctor = document.getElementById('cust-doctor').value.trim();
+  const hospital = document.getElementById('cust-hospital').value.trim();
+  const location = document.getElementById('cust-location').value.trim();
+  const dept = document.getElementById('cust-dept').value.trim();
+
+  const custom = {
+    doctor: doctor || DEFAULTS.doctor,
+    hospital: hospital || DEFAULTS.hospital,
+    location: location || DEFAULTS.location,
+    dept: dept || DEFAULTS.dept
+  };
+
+  try { localStorage.setItem('turno-custom', JSON.stringify(custom)); } catch(e){}
+  replaceNamesInDOM(custom);
+  document.getElementById('customize-overlay').style.display='none';
+}
+
+function replaceNamesInDOM(c) {
+  // Ensure dept has a value (backward compat with old saved data)
+  if(!c.dept) c.dept = DEFAULTS.dept;
+  // Replace in State data
+  State.appointments.forEach(a => { if(a.hospital==='Apollo Hospitals'||a.doctor==='Dr. Karthik R'){ a.hospital=c.hospital; a.doctor=c.doctor; a.addr=c.location; a.spec=c.dept; }});
+  State.past.forEach(a => { if(a.hospital==='Apollo Hospitals'||a.doctor==='Dr. Karthik R'){ a.hospital=c.hospital; a.doctor=c.doctor; a.addr=c.location; a.spec=c.dept; }});
+  State.notifications.forEach(n => { n.msg=n.msg.replace(/Apollo Hospitals/g,c.hospital).replace(/Dr\. Karthik R/g,c.doctor); });
+  State.hospitals[0] = {...State.hospitals[0], name:c.hospital, addr:c.location+' · 2.4 km'};
+  State.doctors[0] = {...State.doctors[0], name:c.doctor, spec:c.dept};
+  State.records[0] = {...State.records[0], doctor:c.doctor};
+
+  // Replace in all visible text nodes
+  const walker = document.createTreeWalker(document.getElementById('app'), NodeFilter.SHOW_TEXT);
+  while(walker.nextNode()){
+    let n = walker.currentNode;
+    if(n.nodeValue.includes('Apollo Hospitals')) n.nodeValue = n.nodeValue.replace(/Apollo Hospitals/g, c.hospital);
+    if(n.nodeValue.includes('Dr. Karthik R')) n.nodeValue = n.nodeValue.replace(/Dr\. Karthik R/g, c.doctor);
+    if(n.nodeValue.includes('Greams Road, Chennai')) n.nodeValue = n.nodeValue.replace(/Greams Road, Chennai/g, c.location);
+    if(n.nodeValue.includes('Greams Road')) n.nodeValue = n.nodeValue.replace(/Greams Road/g, c.location.split(',')[0] || c.location);
+    if(n.nodeValue.includes('Dermatology OP')) n.nodeValue = n.nodeValue.replace(/Dermatology OP/g, c.dept + ' OP');
+    if(n.nodeValue.includes('Dermatology')) n.nodeValue = n.nodeValue.replace(/Dermatology/g, c.dept);
+    if(n.nodeValue.includes('Dermatologist')) n.nodeValue = n.nodeValue.replace(/Dermatologist/g, c.dept + ' Specialist');
+    if(n.nodeValue.includes('Apollo Hospitals, Greams Road')) n.nodeValue = n.nodeValue.replace(/Apollo Hospitals, Greams Road/g, c.hospital + ', ' + (c.location.split(',')[0]||c.location));
+  }
+
+  // Update specific elements with IDs
+  const hd = document.getElementById('hd-name'); if(hd) hd.textContent = c.hospital;
+  const qrH = document.getElementById('qr-hosp'); if(qrH) qrH.textContent = c.hospital;
+  const qrD = document.getElementById('qr-dept'); if(qrD) qrD.textContent = c.dept + ' · ' + c.doctor;
+  const vwD = document.getElementById('vw-doc'); if(vwD) vwD.textContent = c.doctor + ' — ' + c.dept;
+  const sucD = document.getElementById('suc-doc'); if(sucD) sucD.textContent = c.doctor;
+  const tpDest = document.getElementById('tp-dest'); if(tpDest) tpDest.textContent = c.hospital + ', ' + (c.location.split(',')[0]||c.location);
+  const tpOrig = document.getElementById('tp-origin'); if(tpOrig) tpOrig.textContent = 'Near ' + (c.location.split(',')[1]||c.location.split(',')[0]||'').trim();
+  const qHosp = document.getElementById('q-hosp'); if(qHosp) qHosp.textContent = c.hospital;
+  const qLoc = document.getElementById('q-loc'); if(qLoc) qLoc.textContent = c.location;
+  const qDept = document.getElementById('q-dept'); if(qDept) qDept.textContent = c.dept + ' OP';
+  const qDoc = document.getElementById('q-doc'); if(qDoc) qDoc.textContent = c.doctor;
+  const apHosp = document.getElementById('ap-hosp'); if(apHosp) apHosp.textContent = c.hospital;
+  const apDoc = document.getElementById('ap-doc'); if(apDoc) apDoc.textContent = c.doctor + ' · ' + c.dept;
+  const apVia = document.getElementById('ap-via'); if(apVia) apVia.textContent = 'Live traffic';
+
+  // Geocode location and update map destination
+  if(c.location && c.location !== DEFAULTS.location){
+    if(selectedLocCoords){
+      // Use pre-selected coords from dropdown
+      updateMapsWithCoords(selectedLocCoords.lat, selectedLocCoords.lon, c.hospital);
+      selectedLocCoords = null;
+    } else {
+      geocodeAndUpdateMaps(c.location, c.hospital);
+    }
+  }
+}
+
+// ====== LOCATION AUTOCOMPLETE (Google Places) ======
+let locSearchTimer = null;
+let selectedLocCoords = null;
+let placesService = null;
+let autocompleteSessionToken = null;
+
+function initPlacesService(){
+  if(!placesService && window.google && google.maps && google.maps.places){
+    placesService = new google.maps.places.AutocompleteService();
+  }
+}
+
+function searchLocations(query){
+  const dropdown = document.getElementById('loc-dropdown');
+  clearTimeout(locSearchTimer);
+  if(!query || query.length < 2){ dropdown.style.display='none'; return; }
+  initPlacesService();
+  if(!placesService){ dropdown.style.display='none'; return; }
+  locSearchTimer = setTimeout(()=>{
+    if(!autocompleteSessionToken) autocompleteSessionToken = new google.maps.places.AutocompleteSessionToken();
+    placesService.getPlacePredictions({
+      input: query,
+      componentRestrictions: {country: 'in'},
+      sessionToken: autocompleteSessionToken,
+      location: new google.maps.LatLng(13.08, 80.27),
+      radius: 50000
+    }, (predictions, status)=>{
+      if(status !== google.maps.places.PlacesServiceStatus.OK || !predictions || !predictions.length){
+        dropdown.style.display='none'; return;
+      }
+      window._placePredictions = predictions;
+      dropdown.innerHTML = predictions.map((p,i)=>{
+        const mainText = p.structured_formatting.main_text;
+        const subText = p.structured_formatting.secondary_text || '';
+        return `<div onclick="selectLocation(${i})" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px;color:#333;transition:background 0.15s" onmouseenter="this.style.background='#f5f8ff'" onmouseleave="this.style.background='white'"><span style="font-weight:500">${mainText}</span><br/><span style="font-size:11px;color:#888">${subText}</span></div>`;
+      }).join('');
+      dropdown.style.display='block';
+    });
+  }, 300);
+}
+
+function selectLocation(idx){
+  const dropdown = document.getElementById('loc-dropdown');
+  dropdown.style.display='none';
+  const predictions = window._placePredictions;
+  if(!predictions || !predictions[idx]) return;
+  const p = predictions[idx];
+  const displayName = p.structured_formatting.main_text + ', ' + (p.structured_formatting.secondary_text||'').split(',').slice(0,2).join(',');
+  document.getElementById('cust-location').value = displayName;
+  // Get place details for coordinates
+  const geocoder = new google.maps.Geocoder();
+  geocoder.geocode({placeId: p.place_id}, (results, status)=>{
+    if(status === 'OK' && results[0]){
+      const loc = results[0].geometry.location;
+      selectedLocCoords = {lat: loc.lat(), lon: loc.lng()};
+    }
+  });
+  autocompleteSessionToken = null; // reset for next session
+}
+
+function loadSavedCustomization(){
+  try {
+    const saved = JSON.parse(localStorage.getItem('turno-custom') || 'null');
+    if(saved && (saved.doctor !== DEFAULTS.doctor || saved.hospital !== DEFAULTS.hospital || saved.location !== DEFAULTS.location || (saved.dept && saved.dept !== DEFAULTS.dept))){
+      if(!saved.dept) saved.dept = DEFAULTS.dept;
+      replaceNamesInDOM(saved);
+    } else {
+      // Show panel on first load if no customization saved
+      setTimeout(()=>{ document.getElementById('customize-overlay').style.display='flex'; }, 600);
+    }
+  } catch(e){
+    setTimeout(()=>{ document.getElementById('customize-overlay').style.display='flex'; }, 600);
+  }
+}
+
+// Geocode a location string and update map coordinates
+function geocodeAndUpdateMaps(locationStr, hospName){
+  if(!window.google || !google.maps) return;
+  const geocoder = new google.maps.Geocoder();
+  geocoder.geocode({address: hospName + ', ' + locationStr + ', India'}, (results, status)=>{
+    if(status === 'OK' && results[0]){
+      const loc = results[0].geometry.location;
+      updateMapsWithCoords(loc.lat(), loc.lng(), hospName);
+    }
+  });
+}
+
+function updateMapsWithCoords(lat, lon, hospName){
+  DEST = [lat, lon];
+  // Origin: ~4-5km away from destination
+  const origLat = lat - 0.035 + (Math.random()*0.01);
+  const origLon = lon - 0.025 + (Math.random()*0.01);
+  ORIGIN = [origLat, origLon];
+
+  // Use Google Directions API for real road route
+  if(window.google && google.maps){
+    const directionsService = new google.maps.DirectionsService();
+    directionsService.route({
+      origin: {lat: origLat, lng: origLon},
+      destination: {lat: lat, lng: lon},
+      travelMode: google.maps.TravelMode.DRIVING
+    }, (result, status)=>{
+      if(status === 'OK' && result.routes[0]){
+        const path = result.routes[0].overview_path;
+        ROUTE = path.map(p=>[p.lat(),p.lng()]);
+        // Update ETA with real data
+        const leg = result.routes[0].legs[0];
+        if(leg){
+          const routeName = leg.summary || '';
+          const apEta = document.getElementById('ap-eta');
+          if(apEta) apEta.textContent = leg.duration.text + ' · ' + leg.distance.text;
+          const apRoute = document.getElementById('ap-route');
+          if(apRoute) apRoute.textContent = routeName ? ('Fastest route via ' + routeName) : 'Fastest route';
+          const apVia = document.getElementById('ap-via');
+          if(apVia) apVia.textContent = routeName ? ('via ' + routeName) : 'Live traffic';
+        }
+      } else {
+        ROUTE = generateCurvedRoute(ORIGIN, DEST);
+      }
+      finalizeMapsUpdate();
+    });
+  } else {
+    ROUTE = generateCurvedRoute(ORIGIN, DEST);
+    finalizeMapsUpdate();
+  }
+}
+
+function generateCurvedRoute(origin, dest){
+  const steps = 20;
+  const route = [];
+  const midLat = (origin[0]+dest[0])/2 + (Math.random()-0.5)*0.015;
+  const midLon = (origin[1]+dest[1])/2 + (Math.random()-0.5)*0.015;
+  for(let i=0; i<=steps; i++){
+    const t = i/steps;
+    // Quadratic bezier curve through midpoint
+    const lat = (1-t)*(1-t)*origin[0] + 2*(1-t)*t*midLat + t*t*dest[0];
+    const lon = (1-t)*(1-t)*origin[1] + 2*(1-t)*t*midLon + t*t*dest[1];
+    route.push([lat, lon]);
+  }
+  return route;
+}
+
+function finalizeMapsUpdate(){
+  routeMap=null; hospMap=null;
+  // Clear map containers so they re-init fresh
+  const r=document.getElementById('map-route'); if(r) r.innerHTML='';
+  const h=document.getElementById('map-hosp'); if(h) h.innerHTML='';
+  try{localStorage.setItem('turno-coords',JSON.stringify({origin:ORIGIN,dest:DEST,route:ROUTE}));}catch(e){}
+}
+
+// Load saved coordinates on startup
+try{
+  const coords = JSON.parse(localStorage.getItem('turno-coords')||'null');
+  if(coords){ ORIGIN=coords.origin; DEST=coords.dest; ROUTE=coords.route; }
+}catch(e){}
 // ============ APP STATE & NAV ============
 const State = {
   currentToken: 18,
@@ -1399,9 +1675,9 @@ function setTheme(dark){
   document.body.classList.toggle('dark',dark);
   State.settings.dark=dark;
   try{localStorage.setItem('turno-dark',dark?'1':'0');}catch(e){}
-  // refresh maps if visible
-  if(routeMap)setTimeout(()=>routeMap.invalidateSize(),50);
-  if(hospMap)setTimeout(()=>hospMap.invalidateSize(),50);
+  // refresh maps if visible (reinitialize for style change)
+  if(routeMap){routeMap=null;const el=document.getElementById('map-route');if(el){el.innerHTML='';setTimeout(initRouteMap,50);}}
+  if(hospMap){hospMap=null;const el=document.getElementById('map-hosp');if(el){el.innerHTML='';setTimeout(initHospMap,50);}}
 }
 
 // FAQ
@@ -1418,61 +1694,167 @@ function renderFaq(){
 function toggleFaq(i){const el=document.getElementById('faq-'+i);const ch=document.getElementById('chev-'+i);el.classList.toggle('hidden');ch.style.transform=el.classList.contains('hidden')?'':'rotate(180deg)';}
 
 // ============ INIT ============
-// === LEAFLET MAPS ===
+// === GOOGLE MAPS ===
 let routeMap=null, hospMap=null, carMarker=null, carTimer=null;
 
-function makeYouIcon(){return L.divIcon({className:'',iconSize:[24,24],iconAnchor:[12,12],html:'<div class="pin-you"></div>'});}
-function makeHospIcon(color){return L.divIcon({className:'',iconSize:[34,42],iconAnchor:[17,40],popupAnchor:[0,-36],html:`<div class="pin-hosp"><svg viewBox="0 0 34 42"><path d="M17 1 C8 1 2 8 2 16 C2 28 17 41 17 41 C17 41 32 28 32 16 C32 8 26 1 17 1 Z" fill="${color}" stroke="white" stroke-width="2"/></svg><span>local_hospital</span></div>`});}
-function makeCarIcon(){return L.divIcon({className:'',iconSize:[28,28],iconAnchor:[14,14],html:'<div style="width:28px;height:28px;background:white;border:3px solid #1565C0;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,0,.35)"><span class="material-symbols-outlined fill" style="font-size:16px;color:#1565C0">directions_car</span></div>'});}
-
-// Chennai coords
-const ORIGIN=[12.9759,80.2206];           // Velachery
-const DEST=[13.0635,80.2487];             // Apollo Greams Road
-const ROUTE=[
+// Chennai coords (defaults)
+let ORIGIN=[12.9759,80.2206];           // Velachery
+let DEST=[13.0635,80.2487];             // Apollo Greams Road
+let ROUTE=[
   [12.9759,80.2206],[12.9810,80.2218],[12.9882,80.2240],[12.9945,80.2265],
   [13.0010,80.2290],[13.0085,80.2330],[13.0165,80.2370],[13.0250,80.2410],
   [13.0340,80.2440],[13.0430,80.2460],[13.0520,80.2475],[13.0590,80.2482],[13.0635,80.2487]
 ];
 
+const DARK_MAP_STYLE = [
+  {elementType:'geometry',stylers:[{color:'#242f3e'}]},
+  {elementType:'labels.text.stroke',stylers:[{color:'#242f3e'}]},
+  {elementType:'labels.text.fill',stylers:[{color:'#746855'}]},
+  {featureType:'road',elementType:'geometry',stylers:[{color:'#38414e'}]},
+  {featureType:'water',elementType:'geometry',stylers:[{color:'#17263c'}]}
+];
+
 function initRouteMap(){
   const el=document.getElementById('map-route'); if(!el) return;
-  if(routeMap){routeMap.invalidateSize();return;}
-  routeMap=L.map(el,{zoomControl:true,attributionControl:true,scrollWheelZoom:false}).setView([13.02,80.235],12);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19,attribution:'© OSM, © CARTO',subdomains:'abcd'}).addTo(routeMap);
-  // route casing + line
-  L.polyline(ROUTE,{color:'white',weight:9,opacity:.9,lineCap:'round',lineJoin:'round'}).addTo(routeMap);
-  L.polyline(ROUTE,{color:'#1565C0',weight:5,opacity:1,lineCap:'round',lineJoin:'round'}).addTo(routeMap);
-  // markers
-  L.marker(ORIGIN,{icon:makeYouIcon()}).addTo(routeMap).bindPopup('<b>You</b><br/>Velachery, Chennai');
-  L.marker(DEST,{icon:makeHospIcon('#E53935')}).addTo(routeMap).bindPopup('<b>Apollo Hospitals</b><br/>Greams Road · Token 32');
-  // animated car
-  carMarker=L.marker(ROUTE[0],{icon:makeCarIcon()}).addTo(routeMap);
-  let i=0;
-  clearInterval(carTimer);
-  carTimer=setInterval(()=>{i=(i+1)%ROUTE.length;carMarker.setLatLng(ROUTE[i]);},700);
-  routeMap.fitBounds(L.latLngBounds(ROUTE),{padding:[30,30]});
+  if(!window.google || !google.maps) return;
+  // Always reload latest coords from localStorage
+  try{
+    const coords = JSON.parse(localStorage.getItem('turno-coords')||'null');
+    if(coords){ ORIGIN=coords.origin; DEST=coords.dest; ROUTE=coords.route; }
+  }catch(e){}
+  // Destroy old map
+  if(routeMap){ routeMap=null; el.innerHTML=''; }
+  const custName = (()=>{try{const s=JSON.parse(localStorage.getItem('turno-custom'));return s||{}}catch(e){return {}}})();
+  const hospLabel = custName.hospital || 'Apollo Hospitals';
+  const isDark = document.body.classList.contains('dark');
+
+  routeMap = new google.maps.Map(el, {
+    center: {lat: DEST[0], lng: DEST[1]},
+    zoom: 13,
+    disableDefaultUI: true,
+    zoomControl: true,
+    styles: isDark ? DARK_MAP_STYLE : [],
+    gestureHandling: 'cooperative'
+  });
+
+  // Use DirectionsRenderer for real road route
+  const directionsService = new google.maps.DirectionsService();
+  const directionsRenderer = new google.maps.DirectionsRenderer({
+    map: routeMap,
+    suppressMarkers: true,
+    polylineOptions: {strokeColor:'#1565C0', strokeWeight:5, strokeOpacity:1}
+  });
+
+  directionsService.route({
+    origin: {lat: ORIGIN[0], lng: ORIGIN[1]},
+    destination: {lat: DEST[0], lng: DEST[1]},
+    travelMode: google.maps.TravelMode.DRIVING
+  }, (result, status)=>{
+    if(status === 'OK'){
+      directionsRenderer.setDirections(result);
+      // Update route points for car animation
+      const path = result.routes[0].overview_path;
+      ROUTE = path.map(p=>[p.lat(),p.lng()]);
+      try{localStorage.setItem('turno-coords',JSON.stringify({origin:ORIGIN,dest:DEST,route:ROUTE}));}catch(e){}
+      // Update ETA
+      const leg = result.routes[0].legs[0];
+      if(leg){
+        const routeName = leg.summary || '';
+        const apEta = document.getElementById('ap-eta');
+        if(apEta) apEta.textContent = leg.duration.text + ' · ' + leg.distance.text;
+        const apRoute = document.getElementById('ap-route');
+        if(apRoute) apRoute.textContent = routeName ? ('Fastest route via ' + routeName) : 'Fastest route';
+        const apVia = document.getElementById('ap-via');
+        if(apVia) apVia.textContent = routeName ? ('via ' + routeName) : 'Live traffic';
+      }
+      // Start car animation along the real route
+      if(carMarker) carMarker.setMap(null);
+      carMarker = new google.maps.Marker({
+        position: {lat:ROUTE[0][0], lng:ROUTE[0][1]},
+        map: routeMap,
+        icon: {path: google.maps.SymbolPath.CIRCLE, scale:12, fillColor:'white', fillOpacity:1, strokeColor:'#1565C0', strokeWeight:3},
+        title: 'En route'
+      });
+      let i=0;
+      clearInterval(carTimer);
+      carTimer=setInterval(()=>{i=(i+1)%ROUTE.length;carMarker.setPosition({lat:ROUTE[i][0],lng:ROUTE[i][1]});},700);
+    } else {
+      // Fallback: draw stored route as polyline
+      const routePath = ROUTE.map(r=>({lat:r[0],lng:r[1]}));
+      new google.maps.Polyline({path: routePath, strokeColor:'#1565C0', strokeWeight:5, strokeOpacity:1, map:routeMap});
+    }
+  });
+
+  // You marker (blue dot)
+  new google.maps.Marker({
+    position: {lat:ORIGIN[0], lng:ORIGIN[1]},
+    map: routeMap,
+    icon: {path: google.maps.SymbolPath.CIRCLE, scale:10, fillColor:'#1565C0', fillOpacity:1, strokeColor:'white', strokeWeight:3},
+    title: 'You'
+  });
+
+  // Hospital marker
+  new google.maps.Marker({
+    position: {lat:DEST[0], lng:DEST[1]},
+    map: routeMap,
+    icon: {url:'data:image/svg+xml,' + encodeURIComponent('<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"34\" height=\"42\" viewBox=\"0 0 34 42\"><path d=\"M17 1C8 1 2 8 2 16C2 28 17 41 17 41S32 28 32 16C32 8 26 1 17 1Z\" fill=\"#E53935\" stroke=\"white\" stroke-width=\"2\"/><text x=\"17\" y=\"22\" text-anchor=\"middle\" font-size=\"16\" fill=\"white\" font-weight=\"bold\">+</text></svg>'), scaledSize: new google.maps.Size(34,42), anchor: new google.maps.Point(17,42)},
+    title: hospLabel
+  });
+
+  // Fit bounds
+  const bounds = new google.maps.LatLngBounds();
+  bounds.extend({lat:ORIGIN[0],lng:ORIGIN[1]});
+  bounds.extend({lat:DEST[0],lng:DEST[1]});
+  routeMap.fitBounds(bounds, 40);
 }
 
 function initHospMap(){
   const el=document.getElementById('map-hosp'); if(!el) return;
-  if(hospMap){hospMap.invalidateSize();return;}
-  hospMap=L.map(el,{zoomControl:false,attributionControl:true,scrollWheelZoom:false}).setView([13.02,80.22],12);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19,attribution:'© OSM',subdomains:'abcd'}).addTo(hospMap);
-  L.marker([12.9759,80.2206],{icon:makeYouIcon()}).addTo(hospMap).bindPopup('<b>You are here</b>');
+  if(!window.google || !google.maps) return;
+  if(hospMap){return;}
+  const isDark = document.body.classList.contains('dark');
+
+  hospMap = new google.maps.Map(el, {
+    center: {lat: 13.02, lng: 80.22},
+    zoom: 12,
+    disableDefaultUI: true,
+    styles: isDark ? DARK_MAP_STYLE : [],
+    gestureHandling: 'cooperative'
+  });
+
+  // You marker
+  new google.maps.Marker({
+    position: {lat:12.9759, lng:80.2206},
+    map: hospMap,
+    icon: {path: google.maps.SymbolPath.CIRCLE, scale:10, fillColor:'#1565C0', fillOpacity:1, strokeColor:'white', strokeWeight:3},
+    title: 'You'
+  });
+
   const pts=[
-    {ll:[13.0635,80.2487],c:'#1565C0',name:'Apollo Hospitals',addr:'Greams Road · 2.4 km'},
-    {ll:[13.0150,80.1880],c:'#7B1FA2',name:'MIOT International',addr:'Manapakkam · 8.1 km'},
-    {ll:[13.0050,80.2570],c:'#E53935',name:'Fortis Malar',addr:'Adyar · 5.3 km'},
-    {ll:[13.0510,80.2070],c:'#FB8C00',name:'SIMS Hospital',addr:'Vadapalani · 6.7 km'},
-    {ll:[13.0335,80.2540],c:'#43A047',name:'Kauvery Hospital',addr:'Alwarpet · 3.2 km'},
+    {ll:DEST,c:'#1565C0',name:(()=>{try{const s=JSON.parse(localStorage.getItem('turno-custom'));return s&&s.hospital?s.hospital:'Apollo Hospitals'}catch(e){return 'Apollo Hospitals'}})()},
+    {ll:[13.0150,80.1880],c:'#7B1FA2',name:'MIOT International'},
+    {ll:[13.0050,80.2570],c:'#E53935',name:'Fortis Malar'},
+    {ll:[13.0510,80.2070],c:'#FB8C00',name:'SIMS Hospital'},
+    {ll:[13.0335,80.2540],c:'#43A047',name:'Kauvery Hospital'},
   ];
-  const group=[];
-  pts.forEach(p=>{const m=L.marker(p.ll,{icon:makeHospIcon(p.c)}).addTo(hospMap).bindPopup(`<b>${p.name}</b><br/>${p.addr}<br/><span style="color:#1565C0;font-weight:600">Tap card to book</span>`);group.push(m.getLatLng());});
-  group.push(L.latLng(12.9759,80.2206));
-  hospMap.fitBounds(L.latLngBounds(group),{padding:[24,24]});
+
+  const bounds = new google.maps.LatLngBounds();
+  bounds.extend({lat:12.9759, lng:80.2206});
+  pts.forEach(p=>{
+    new google.maps.Marker({
+      position: {lat:p.ll[0], lng:p.ll[1]},
+      map: hospMap,
+      icon: {url:'data:image/svg+xml,' + encodeURIComponent('<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"34\" height=\"42\" viewBox=\"0 0 34 42\"><path d=\"M17 1C8 1 2 8 2 16C2 28 17 41 17 41S32 28 32 16C32 8 26 1 17 1Z\" fill=\"'+p.c+'\" stroke=\"white\" stroke-width=\"2\"/><text x=\"17\" y=\"22\" text-anchor=\"middle\" font-size=\"16\" fill=\"white\" font-weight=\"bold\">+</text></svg>'), scaledSize: new google.maps.Size(34,42), anchor: new google.maps.Point(17,42)},
+      title: p.name
+    });
+    bounds.extend({lat:p.ll[0], lng:p.ll[1]});
+  });
+  hospMap.fitBounds(bounds, 30);
 }
 
 document.addEventListener('DOMContentLoaded',()=>{
+  // Load customization
+  loadSavedCustomization();
   // restore theme
   try{if(localStorage.getItem('turno-dark')==='1')document.body.classList.add('dark');}catch(e){}
   // If already onboarded, skip to home directly
@@ -1484,7 +1866,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       renderTabbar(document.getElementById('s-home'));
       renderFamilyPills();
       renderFaq();
-      setInterval(()=>{if(cur==='s-queue'&&State.currentToken<State.yourToken-1&&Math.random()<0.4){State.currentToken++;renderQueue();}},6000);
+      setInterval(()=>{if(cur==='s-queue'&&State.currentToken<State.yourToken-1){State.currentToken++;renderQueue();}},20000);
       if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
       return;
     }
@@ -1493,7 +1875,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   setTimeout(()=>{if(cur==='s-splash')nav('s-onboarding');},1800);
   renderFaq();
   // Simulate queue advancing live
-  setInterval(()=>{if(cur==='s-queue'&&State.currentToken<State.yourToken-1&&Math.random()<0.4){State.currentToken++;renderQueue();}},6000);
+  setInterval(()=>{if(cur==='s-queue'&&State.currentToken<State.yourToken-1){State.currentToken++;renderQueue();}},20000);
   // Register Service Worker
   if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
 });
