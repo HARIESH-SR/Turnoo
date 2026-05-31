@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<title>Turno — Receptionist</title>
+<meta name="theme-color" content="#1565C0"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+tailwind.config={darkMode:'class',theme:{extend:{colors:{
+brand:{50:'#e3f2fd',100:'#bbdefb',200:'#90caf9',300:'#64b5f6',400:'#42a5f5',500:'#1E88E5',600:'#1565C0',700:'#0D47A1',800:'#0a3d8f',900:'#082e6b'},
+accent:{50:'#e8f5e9',100:'#c8e6c9',200:'#a5d6a7',300:'#81c784',400:'#66bb6a',500:'#4CAF50',600:'#43A047',700:'#388E3C'},
+warn:{50:'#fff3e0',100:'#ffe0b2',400:'#FFA726',500:'#FF9800',600:'#FB8C00'},
+danger:{50:'#fce4ec',500:'#E53935',600:'#D32F2F'},
+gray:{50:'#FAFAFA',100:'#F5F5F5',200:'#EEEEEE',300:'#E0E0E0',400:'#BDBDBD',500:'#9E9E9E',600:'#757575',700:'#616161',800:'#424242',900:'#212121'}
+},fontFamily:{sans:['Inter','system-ui','sans-serif']}}}}
+</script>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:'Inter',sans-serif;overscroll-behavior:none;background:#0D47A1;margin:0}
+.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;user-select:none}
+.material-symbols-outlined.fill{font-variation-settings:'FILL' 1}
+.hide-scrollbar::-webkit-scrollbar{display:none}
+.hide-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
+.screen{display:none;position:absolute;inset:0;flex-direction:column;background:#FAFAFA}
+.screen.active{display:flex}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes pulse2{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes toastIn{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
+.fade-up{animation:fadeUp .3s ease forwards}
+.live-dot{animation:pulse2 1.5s ease-in-out infinite}
+.pb-safe{padding-bottom:max(env(safe-area-inset-bottom,20px),20px)}
+
+/* Default: phone frame centered */
+body{display:flex;flex-direction:column;align-items:center;min-height:100vh;padding-top:60px}
+#app{width:393px;height:852px;border-radius:44px;overflow:hidden;box-shadow:0 30px 90px rgba(0,0,0,.5);border:6px solid #222;position:relative;transition:all .4s cubic-bezier(.4,0,.2,1)}
+
+/* View modes controlled by body class */
+body.view-mobile #app{width:393px;height:852px;border-radius:44px;border:6px solid #222}
+body.view-tablet #app{width:768px;height:1024px;border-radius:28px;border:5px solid #333}
+body.view-desktop #app{width:100%;max-width:100%;height:calc(100vh - 60px);border-radius:0;border:none;box-shadow:none}
+
+/* On actual mobile devices, go full screen */
+@media (max-width:499px){
+  body{padding-top:0 !important}
+  #view-switcher{display:none !important}
+  #app{width:100% !important;min-height:100dvh !important;height:auto !important;border-radius:0 !important;border:none !important;box-shadow:none !important}
+}
+
+/* View switcher bar */
+#view-switcher{position:fixed;top:0;left:0;right:0;z-index:999;height:52px;background:rgba(13,71,161,.95);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;gap:4px;padding:0 16px;border-bottom:1px solid rgba(255,255,255,.1)}
+.vs-btn{padding:7px 16px;border-radius:10px;font-size:12px;font-weight:600;color:rgba(255,255,255,.6);cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .2s;border:1px solid transparent}
+.vs-btn:hover{color:rgba(255,255,255,.85);background:rgba(255,255,255,.08)}
+.vs-btn.active{background:rgba(255,255,255,.15);color:white;border-color:rgba(255,255,255,.2)}
+.vs-btn .material-symbols-outlined{font-size:16px}
+
+#toast{position:absolute;top:60px;left:50%;transform:translateX(-50%);z-index:200;display:none;animation:toastIn .25s ease}
+#toast.show{display:flex}
+.sheet-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.5);z-index:150;display:none}
+.sheet-backdrop.show{display:block}
+.sheet{position:absolute;bottom:0;left:0;right:0;background:white;border-radius:24px 24px 0 0;z-index:160;animation:slideUp .3s ease;max-height:85%;overflow-y:auto}
+.progress-bar{height:8px;border-radius:4px;background:#E0E0E0;overflow:hidden}
+.progress-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#1E88E5,#42A5F5);transition:width .8s ease}
+input:focus{outline:none;border-color:#1E88E5}
+@keyframes pulse-ring{0%{box-shadow:0 0 0 0 rgba(30,136,229,0.5)}100%{box-shadow:0 0 0 14px rgba(30,136,229,0)}}
+.token-pulse{animation:pulse-ring 2s ease-in-out infinite}
+
+/* QR scanner container */
+#qr-reader{width:100%;border-radius:16px;overflow:hidden}
+#qr-reader video{border-radius:16px}
+#qr-reader__scan_region{border-radius:16px;overflow:hidden}
+#qr-reader__dashboard{padding:12px 0 !important}
+#qr-reader__dashboard button{background:#1565C0 !important;color:white !important;border:none !important;border-radius:12px !important;padding:10px 20px !important;font-weight:600 !important;font-family:'Inter',sans-serif !important}
+
+/* Tab active */
+.tab-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;flex:1;cursor:pointer;opacity:.5;transition:all .2s}
+.tab-item.active{opacity:1}
+.tab-item.active .tab-icon{color:#1565C0}
+.tab-item.active .tab-label{color:#1565C0;font-weight:700}
+
+/* Queue row */
+.q-row{border-bottom:1px solid #F5F5F5;padding:12px 0;transition:all .2s}
+.q-row:active{background:#F5F5F5;border-radius:12px}
+</style>
+</head>
+<body class="view-mobile">
+
+<!-- View Switcher Bar -->
+<div id="view-switcher">
+  <div class="vs-btn active" onclick="setView('mobile')" id="vs-mobile"><span class="material-symbols-outlined">smartphone</span>Mobile</div>
+  <div class="vs-btn" onclick="setView('tablet')" id="vs-tablet"><span class="material-symbols-outlined">tablet</span>Tablet</div>
+  <div class="vs-btn" onclick="setView('desktop')" id="vs-desktop"><span class="material-symbols-outlined">desktop_windows</span>Desktop</div>
+</div>
+
+<div id="app" class="bg-gray-50 relative overflow-hidden">
+
+<!-- ============ TOAST ============ -->
+<div id="toast" class="bg-white rounded-xl px-4 py-3 shadow-lg flex items-center gap-2 text-sm font-medium max-w-[85%]">
+  <span class="material-symbols-outlined fill text-accent-500 text-[20px]" id="toast-icon">check_circle</span>
+  <span class="text-gray-900" id="toast-msg">Done</span>
+</div>
+
+<!-- ============ SHEET BACKDROP ============ -->
+<div id="sheet-backdrop" class="sheet-backdrop" onclick="closeSheet()"></div>
+
+<!-- ============ SCREEN: DASHBOARD ============ -->
+<div id="s-dash" class="screen active">
+  <!-- Status bar -->
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium">
+    <span id="dash-time">9:41</span>
+    <div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div>
+  </div>
+  <!-- Header -->
+  <header class="bg-white px-5 pt-3 pb-4">
+    <div class="flex justify-between items-start">
+      <div>
+        <h1 class="text-lg font-bold text-gray-900" id="dash-hosp">Apollo Hospitals</h1>
+        <p class="text-xs text-gray-500 mt-0.5"><span id="dash-dept">Dermatology</span> · <span id="dash-doc">Dr. Karthik R</span></p>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="flex items-center gap-1.5 bg-accent-50 text-accent-700 text-xs font-bold px-3 py-1.5 rounded-full"><span class="w-2 h-2 rounded-full bg-accent-500 live-dot"></span>Live</span>
+        <button onclick="nav('s-settings')" class="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center active:scale-95"><span class="material-symbols-outlined text-gray-600 text-[20px]">settings</span></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-24">
+    <div class="px-5 py-4 space-y-4">
+
+      <!-- Stats Grid -->
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-white rounded-2xl p-4 shadow-sm text-center">
+          <p class="text-xs text-gray-400 mb-1">Now Serving</p>
+          <p class="text-4xl font-black text-brand-600" id="s-current">18</p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 shadow-sm text-center">
+          <p class="text-xs text-gray-400 mb-1">In Queue</p>
+          <p class="text-4xl font-black text-gray-900" id="s-waiting">14</p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 shadow-sm text-center">
+          <p class="text-xs text-gray-400 mb-1">Completed</p>
+          <p class="text-4xl font-black text-accent-600" id="s-done">17</p>
+        </div>
+        <div class="bg-white rounded-2xl p-4 shadow-sm text-center">
+          <p class="text-xs text-gray-400 mb-1">Avg. Wait</p>
+          <p class="text-3xl font-black text-warn-600" id="s-avg">8<span class="text-base font-bold text-gray-400"> min</span></p>
+        </div>
+      </div>
+
+      <!-- Current Patient Card -->
+      <div class="bg-white rounded-2xl p-5 shadow-sm border-2 border-brand-500 token-pulse">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-bold text-brand-600 uppercase tracking-wider">Now Serving</span>
+          <span class="w-2.5 h-2.5 rounded-full bg-brand-500 live-dot"></span>
+        </div>
+        <div class="flex items-center gap-4 mb-4">
+          <div class="w-16 h-16 rounded-2xl bg-brand-50 flex items-center justify-center">
+            <span class="text-3xl font-black text-brand-600" id="c-token">18</span>
+          </div>
+          <div class="flex-1">
+            <p class="font-bold text-gray-900" id="c-name">Rajesh Kumar</p>
+            <p class="text-xs text-gray-500" id="c-phone">+91 98765 4XXXX</p>
+            <div class="flex items-center gap-3 mt-1 text-xs text-gray-400">
+              <span>In: <b class="text-gray-600" id="c-time">10:02 AM</b></span>
+              <span>Wait: <b class="text-brand-600" id="c-wait">6 min</b></span>
+            </div>
+          </div>
+        </div>
+        <!-- Main CTA -->
+        <button onclick="callNext()" class="w-full bg-brand-600 text-white font-bold text-base py-4 rounded-xl active:scale-[0.97] flex items-center justify-center gap-2 shadow-lg shadow-brand-200/50 transition-transform">
+          <span class="material-symbols-outlined fill text-[22px]">skip_next</span>Call Next Patient
+        </button>
+        <div class="grid grid-cols-2 gap-2 mt-3">
+          <button onclick="skipCurrent()" class="py-3 rounded-xl bg-warn-50 text-warn-600 text-sm font-semibold flex items-center justify-center gap-1.5 active:scale-[0.97]"><span class="material-symbols-outlined text-[18px]">redo</span>Skip</button>
+          <button onclick="markNoShow()" class="py-3 rounded-xl bg-danger-50 text-danger-600 text-sm font-semibold flex items-center justify-center gap-1.5 active:scale-[0.97]"><span class="material-symbols-outlined text-[18px]">person_off</span>No Show</button>
+        </div>
+      </div>
+
+      <!-- Quick Add Walk-in -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <h3 class="font-bold text-gray-900 text-sm mb-3 flex items-center gap-2"><span class="material-symbols-outlined fill text-accent-500 text-[20px]">person_add</span>Quick Add Walk-in</h3>
+        <div class="flex gap-2 mb-2">
+          <input id="walkin-name" class="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm" placeholder="Patient name"/>
+          <input id="walkin-phone" class="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm" placeholder="Phone"/>
+        </div>
+        <button onclick="addWalkin()" class="w-full bg-accent-500 text-white font-bold py-3 rounded-xl active:scale-[0.97] flex items-center justify-center gap-2"><span class="material-symbols-outlined text-[18px]">add</span>Add to Queue</button>
+      </div>
+
+      <!-- Queue Progress -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <div class="flex justify-between items-center mb-2">
+          <p class="text-sm font-bold text-gray-900">Today's Progress</p>
+          <p class="text-sm font-bold text-brand-600" id="d-pct">36%</p>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="d-fill" style="width:36%"></div></div>
+        <div class="flex justify-between text-xs text-gray-400 mt-2"><span>Token 1</span><span id="d-total">Token 50</span></div>
+      </div>
+
+      <!-- Recent Activity -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <h3 class="text-sm font-bold text-gray-900 mb-3">Recent Activity</h3>
+        <div class="space-y-2" id="recent-activity"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Bottom Tab Bar -->
+  <nav class="absolute bottom-0 w-full z-50 bg-white border-t border-gray-200 flex justify-around items-start px-2 pt-2 pb-safe">
+    <div class="tab-item active" onclick="nav('s-dash')"><span class="material-symbols-outlined fill tab-icon text-[22px]">dashboard</span><span class="tab-label text-[10px] text-gray-600">Dashboard</span></div>
+    <div class="tab-item" onclick="nav('s-queue')"><span class="material-symbols-outlined fill tab-icon text-[22px]">format_list_numbered</span><span class="tab-label text-[10px] text-gray-600">Queue</span></div>
+    <div class="tab-item" onclick="nav('s-scan')"><span class="material-symbols-outlined fill tab-icon text-[22px]">qr_code_scanner</span><span class="tab-label text-[10px] text-gray-600">Scan</span></div>
+    <div class="tab-item" onclick="nav('s-settings')"><span class="material-symbols-outlined fill tab-icon text-[22px]">settings</span><span class="tab-label text-[10px] text-gray-600">Settings</span></div>
+  </nav>
+</div>
+
+<!-- ============ SCREEN: QUEUE LIST ============ -->
+<div id="s-queue" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span id="q-time">9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center justify-between border-b border-gray-100">
+    <h1 class="text-lg font-bold text-gray-900">Patient Queue</h1>
+    <div class="flex items-center gap-2">
+      <button onclick="setFilter('all')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-brand-50 text-brand-700" id="f-all">All</button>
+      <button onclick="setFilter('waiting')" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-500" id="f-waiting">Waiting</button>
+      <button onclick="setFilter('done')" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-500" id="f-done">Done</button>
+    </div>
+  </header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-24">
+    <div class="px-5 py-3" id="queue-list"></div>
+  </main>
+  <nav class="absolute bottom-0 w-full z-50 bg-white border-t border-gray-200 flex justify-around items-start px-2 pt-2 pb-safe">
+    <div class="tab-item" onclick="nav('s-dash')"><span class="material-symbols-outlined fill tab-icon text-[22px]">dashboard</span><span class="tab-label text-[10px] text-gray-600">Dashboard</span></div>
+    <div class="tab-item active" onclick="nav('s-queue')"><span class="material-symbols-outlined fill tab-icon text-[22px]">format_list_numbered</span><span class="tab-label text-[10px] text-gray-600">Queue</span></div>
+    <div class="tab-item" onclick="nav('s-scan')"><span class="material-symbols-outlined fill tab-icon text-[22px]">qr_code_scanner</span><span class="tab-label text-[10px] text-gray-600">Scan</span></div>
+    <div class="tab-item" onclick="nav('s-settings')"><span class="material-symbols-outlined fill tab-icon text-[22px]">settings</span><span class="tab-label text-[10px] text-gray-600">Settings</span></div>
+  </nav>
+</div>
+
+<!-- ============ SCREEN: QR SCANNER ============ -->
+<div id="s-scan" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span id="sc-time">9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 border-b border-gray-100">
+    <h1 class="text-lg font-bold text-gray-900">Scan Patient QR</h1>
+    <p class="text-xs text-gray-500 mt-0.5">Scan patient's token QR code to check them in</p>
+  </header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-24">
+    <div class="px-5 py-4 space-y-4">
+      <!-- Scanner -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <div id="qr-reader" class="rounded-2xl overflow-hidden"></div>
+        <div class="flex gap-2 mt-3">
+          <button onclick="startScanner()" id="btn-start-scan" class="flex-1 bg-brand-600 text-white font-semibold text-sm py-3 rounded-xl active:scale-[0.97] flex items-center justify-center gap-2"><span class="material-symbols-outlined text-[18px]">photo_camera</span>Start Camera</button>
+          <button onclick="stopScanner()" id="btn-stop-scan" class="flex-1 bg-gray-200 text-gray-700 font-semibold text-sm py-3 rounded-xl active:scale-[0.97] flex items-center justify-center gap-2 hidden"><span class="material-symbols-outlined text-[18px]">stop</span>Stop</button>
+        </div>
+      </div>
+
+      <!-- Manual Entry -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <h3 class="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2"><span class="material-symbols-outlined text-gray-500 text-[18px]">edit</span>Manual Token Entry</h3>
+        <div class="flex gap-2">
+          <input id="manual-token" type="number" inputmode="numeric" class="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold" placeholder="Enter token number"/>
+          <button onclick="manualCheckin()" class="bg-brand-600 text-white font-bold px-5 rounded-xl active:scale-95">Check In</button>
+        </div>
+      </div>
+
+      <!-- Last Scanned -->
+      <div id="scan-result" class="bg-white rounded-2xl p-4 shadow-sm hidden">
+        <h3 class="text-sm font-bold text-gray-900 mb-3">Last Scanned</h3>
+        <div class="bg-accent-50 rounded-xl p-4 flex items-center gap-4">
+          <div class="w-14 h-14 rounded-2xl bg-accent-100 flex items-center justify-center">
+            <span class="text-2xl font-black text-accent-700" id="scan-token">—</span>
+          </div>
+          <div>
+            <p class="font-bold text-gray-900" id="scan-name">—</p>
+            <p class="text-xs text-accent-700 font-semibold mt-1"><span class="material-symbols-outlined fill text-[14px]">check_circle</span> Checked in successfully</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scan History -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <h3 class="text-sm font-bold text-gray-900 mb-3">Scan History</h3>
+        <div class="space-y-2" id="scan-history">
+          <p class="text-xs text-gray-400 text-center py-4">No scans yet today</p>
+        </div>
+      </div>
+    </div>
+  </main>
+  <nav class="absolute bottom-0 w-full z-50 bg-white border-t border-gray-200 flex justify-around items-start px-2 pt-2 pb-safe">
+    <div class="tab-item" onclick="nav('s-dash')"><span class="material-symbols-outlined fill tab-icon text-[22px]">dashboard</span><span class="tab-label text-[10px] text-gray-600">Dashboard</span></div>
+    <div class="tab-item" onclick="nav('s-queue')"><span class="material-symbols-outlined fill tab-icon text-[22px]">format_list_numbered</span><span class="tab-label text-[10px] text-gray-600">Queue</span></div>
+    <div class="tab-item active" onclick="nav('s-scan')"><span class="material-symbols-outlined fill tab-icon text-[22px]">qr_code_scanner</span><span class="tab-label text-[10px] text-gray-600">Scan</span></div>
+    <div class="tab-item" onclick="nav('s-settings')"><span class="material-symbols-outlined fill tab-icon text-[22px]">settings</span><span class="tab-label text-[10px] text-gray-600">Settings</span></div>
+  </nav>
+</div>
+
+<!-- ============ SCREEN: SETTINGS ============ -->
+<div id="s-settings" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span id="set-time">9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 border-b border-gray-100">
+    <h1 class="text-lg font-bold text-gray-900">Settings</h1>
+    <p class="text-xs text-gray-500 mt-0.5">Configure your clinic queue</p>
+  </header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-24">
+    <div class="px-5 py-4 space-y-4">
+      <!-- Clinic Info -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm space-y-3">
+        <h3 class="text-sm font-bold text-gray-900 flex items-center gap-2"><span class="material-symbols-outlined fill text-brand-500 text-[18px]">local_hospital</span>Clinic Info</h3>
+        <div>
+          <label class="text-xs font-semibold text-gray-500 mb-1 block">Hospital / Clinic Name</label>
+          <input id="inp-hosp" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" value="Apollo Hospitals"/>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-500 mb-1 block">Department</label>
+          <input id="inp-dept" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" value="Dermatology"/>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-500 mb-1 block">Doctor Name</label>
+          <input id="inp-doc" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" value="Dr. Karthik R"/>
+        </div>
+      </div>
+
+      <!-- Queue Config -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm space-y-3">
+        <h3 class="text-sm font-bold text-gray-900 flex items-center gap-2"><span class="material-symbols-outlined fill text-accent-500 text-[18px]">tune</span>Queue Configuration</h3>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs font-semibold text-gray-500 mb-1 block">Start Token</label>
+            <input id="inp-start" type="number" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" value="1"/>
+          </div>
+          <div>
+            <label class="text-xs font-semibold text-gray-500 mb-1 block">Total Tokens</label>
+            <input id="inp-total" type="number" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" value="50"/>
+          </div>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-500 mb-1 block">Avg. Consultation Time (min)</label>
+          <input id="inp-avgtime" type="number" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" value="8"/>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <button onclick="saveSettings()" class="w-full bg-brand-600 text-white font-bold text-base py-4 rounded-xl active:scale-[0.97] shadow-lg shadow-brand-200/50">Save Settings</button>
+      <button onclick="resetQueue()" class="w-full bg-danger-50 text-danger-600 font-semibold text-sm py-3.5 rounded-xl active:scale-[0.97]">Reset Queue (Start Fresh)</button>
+
+      <!-- App Info -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center gap-3">
+          <div class="w-11 h-11 rounded-xl bg-brand-600 flex items-center justify-center"><span class="material-symbols-outlined fill text-white text-[24px]">queue</span></div>
+          <div>
+            <p class="font-bold text-gray-900 text-sm">Turno Receptionist</p>
+            <p class="text-xs text-gray-500">v1.0 · Queue Management System</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <nav class="absolute bottom-0 w-full z-50 bg-white border-t border-gray-200 flex justify-around items-start px-2 pt-2 pb-safe">
+    <div class="tab-item" onclick="nav('s-dash')"><span class="material-symbols-outlined fill tab-icon text-[22px]">dashboard</span><span class="tab-label text-[10px] text-gray-600">Dashboard</span></div>
+    <div class="tab-item" onclick="nav('s-queue')"><span class="material-symbols-outlined fill tab-icon text-[22px]">format_list_numbered</span><span class="tab-label text-[10px] text-gray-600">Queue</span></div>
+    <div class="tab-item" onclick="nav('s-scan')"><span class="material-symbols-outlined fill tab-icon text-[22px]">qr_code_scanner</span><span class="tab-label text-[10px] text-gray-600">Scan</span></div>
+    <div class="tab-item active" onclick="nav('s-settings')"><span class="material-symbols-outlined fill tab-icon text-[22px]">settings</span><span class="tab-label text-[10px] text-gray-600">Settings</span></div>
+  </nav>
+</div>
+
+<!-- ============ SHEET: Patient Detail ============ -->
+<div id="patient-sheet" class="sheet hidden" style="padding:24px 20px 40px">
+  <div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-5"></div>
+  <div class="flex items-center gap-4 mb-4">
+    <div class="w-14 h-14 rounded-2xl bg-brand-50 flex items-center justify-center"><span class="text-2xl font-black text-brand-600" id="ps-token">—</span></div>
+    <div>
+      <p class="font-bold text-gray-900 text-lg" id="ps-name">—</p>
+      <p class="text-sm text-gray-500" id="ps-phone">—</p>
+    </div>
+  </div>
+  <div class="grid grid-cols-3 gap-3 mb-4">
+    <div class="bg-gray-50 rounded-xl p-3 text-center"><p class="text-xs text-gray-400">Check-in</p><p class="text-sm font-bold text-gray-900" id="ps-checkin">—</p></div>
+    <div class="bg-gray-50 rounded-xl p-3 text-center"><p class="text-xs text-gray-400">Wait</p><p class="text-sm font-bold text-brand-600" id="ps-wait">—</p></div>
+    <div class="bg-gray-50 rounded-xl p-3 text-center"><p class="text-xs text-gray-400">Status</p><p class="text-sm font-bold text-accent-600" id="ps-status">—</p></div>
+  </div>
+  <div class="space-y-2">
+    <button onclick="callSpecific(window._sheetToken)" class="w-full bg-brand-600 text-white font-bold py-3.5 rounded-xl active:scale-[0.97] flex items-center justify-center gap-2"><span class="material-symbols-outlined text-[18px]">call</span>Call This Patient</button>
+    <button onclick="sendReminder(window._sheetToken)" class="w-full bg-warn-50 text-warn-600 font-semibold py-3 rounded-xl active:scale-[0.97] flex items-center justify-center gap-2"><span class="material-symbols-outlined text-[18px]">sms</span>Send Reminder</button>
+    <button onclick="markCheckedIn(window._sheetToken)" class="w-full bg-accent-50 text-accent-700 font-semibold py-3 rounded-xl active:scale-[0.97] flex items-center justify-center gap-2"><span class="material-symbols-outlined text-[18px]">check_circle</span>Mark Checked In</button>
+  </div>
+</div>
+
+</div><!-- end #app -->
+
+<script>
+// ===== STATE =====
+let currentToken = 18;
+let queue = [];
+let completed = [];
+let totalTokens = 50;
+let queueFilter = 'all';
+let scanHistory = [];
+let qrScanner = null;
+let scannerRunning = false;
+
+const NAMES = ['Rajesh Kumar','Priya Sharma','Anitha V','Mohammed Ismail','Lakshmi N','Suresh B','Kavitha R','Dinesh M','Fatima Khan','Ganesh P','Revathi S','Arun Kumar','Deepa M','Srinivas R','Meena K','Pooja R','Vikram S','Nandini B','Karthik V','Uma Devi'];
+
+// ===== NAVIGATION =====
+let curScreen = 's-dash';
+function nav(id){
+  // Stop scanner when leaving scan screen
+  if(curScreen==='s-scan' && id!=='s-scan') stopScanner();
+  
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  curScreen = id;
+  
+  // Update tab bars
+  document.querySelectorAll('.tab-item').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll(`#${id} .tab-item`).forEach(t=>{
+    // Find the matching tab
+  });
+  // Re-highlight correct tab in current screen's nav
+  const screenEl = document.getElementById(id);
+  const tabs = screenEl.querySelectorAll('.tab-item');
+  tabs.forEach(t=>{
+    const onclick = t.getAttribute('onclick');
+    if(onclick && onclick.includes(id)) t.classList.add('active');
+    else t.classList.remove('active');
+  });
+  
+  if(id==='s-queue') renderQueueList();
+}
+
+// ===== INIT QUEUE =====
+function initQueue(){
+  queue = [];
+  completed = [];
+  for(let i=1; i<currentToken; i++){
+    completed.push({
+      token: i,
+      name: NAMES[(i-1)%NAMES.length],
+      phone: '+91 9' + String(Math.floor(Math.random()*9000+1000)) + ' XXXXX',
+      time: formatTime(9,0 + (i-1)*7),
+      status: 'done',
+      checkin: true
+    });
+  }
+  for(let i=currentToken; i<=Math.min(currentToken+14, totalTokens); i++){
+    queue.push({
+      token: i,
+      name: NAMES[(i-1)%NAMES.length],
+      phone: '+91 9' + String(Math.floor(Math.random()*9000+1000)) + ' XXXXX',
+      time: formatTime(9, (i-1)*7),
+      status: i===currentToken?'serving':'waiting',
+      checkin: i<=currentToken+5
+    });
+  }
+  updateAll();
+}
+
+function formatTime(h, totalMin){
+  const hours = h + Math.floor(totalMin/60);
+  const mins = totalMin % 60;
+  const ampm = hours>=12?'PM':'AM';
+  const h12 = hours>12?hours-12:hours===0?12:hours;
+  return h12+':'+String(mins).padStart(2,'0')+' '+ampm;
+}
+
+function updateAll(){
+  updateStats();
+  updateCurrentPatient();
+  updateProgress();
+  updateRecentActivity();
+  if(curScreen==='s-queue') renderQueueList();
+}
+
+function updateStats(){
+  const el = id => document.getElementById(id);
+  el('s-current').textContent = currentToken;
+  el('s-waiting').textContent = queue.filter(q=>q.status==='waiting').length;
+  el('s-done').textContent = completed.length;
+  const avg = Math.floor(Math.random()*4+5);
+  el('s-avg').innerHTML = avg+'<span class="text-base font-bold text-gray-400"> min</span>';
+}
+
+function updateCurrentPatient(){
+  const p = queue.find(q=>q.status==='serving');
+  if(p){
+    document.getElementById('c-token').textContent = p.token;
+    document.getElementById('c-name').textContent = p.name;
+    document.getElementById('c-phone').textContent = p.phone;
+    document.getElementById('c-time').textContent = p.time;
+    document.getElementById('c-wait').textContent = Math.floor(Math.random()*6+2)+' min';
+  }
+}
+
+function updateProgress(){
+  const pct = Math.round((completed.length / totalTokens)*100);
+  document.getElementById('d-pct').textContent = pct+'%';
+  document.getElementById('d-fill').style.width = pct+'%';
+  document.getElementById('d-total').textContent = 'Token '+totalTokens;
+}
+
+function updateRecentActivity(){
+  const el = document.getElementById('recent-activity');
+  const recent = completed.slice(-4).reverse();
+  if(!recent.length){ el.innerHTML='<p class="text-xs text-gray-400 text-center py-2">No activity yet</p>'; return; }
+  el.innerHTML = recent.map(p=>`
+    <div class="flex items-center gap-3 py-1.5">
+      <span class="w-8 h-8 rounded-lg bg-accent-50 flex items-center justify-center text-xs font-bold text-accent-700">${p.token}</span>
+      <div class="flex-1"><p class="text-sm font-medium text-gray-900">${p.name}</p></div>
+      <span class="text-xs text-gray-400">${p.time}</span>
+      <span class="material-symbols-outlined fill text-accent-500 text-[16px]">check_circle</span>
+    </div>
+  `).join('');
+}
+
+// ===== QUEUE ACTIONS =====
+function callNext(){
+  const current = queue.find(q=>q.status==='serving');
+  if(current){
+    current.status='done';
+    completed.push(current);
+    queue = queue.filter(q=>q!==current);
+  }
+  currentToken++;
+  const next = queue[0];
+  if(next){
+    next.status='serving';
+    toast('Token '+next.token+' — '+next.name+' called','success');
+  } else {
+    toast('No more patients in queue','info');
+  }
+  updateAll();
+}
+
+function skipCurrent(){
+  const current = queue.find(q=>q.status==='serving');
+  if(current){
+    current.status='waiting';
+    queue = queue.filter(q=>q!==current);
+    const insertAt = Math.min(3, queue.length);
+    queue.splice(insertAt, 0, current);
+    currentToken++;
+    if(queue[0]) queue[0].status='serving';
+    toast('Token '+current.token+' skipped','warn');
+  }
+  updateAll();
+}
+
+function markNoShow(){
+  const current = queue.find(q=>q.status==='serving');
+  if(current){
+    current.status='done';
+    completed.push(current);
+    queue = queue.filter(q=>q!==current);
+    currentToken++;
+    if(queue[0]) queue[0].status='serving';
+    toast('Token '+current.token+' — No Show','error');
+  }
+  updateAll();
+}
+
+function addWalkin(){
+  const name = document.getElementById('walkin-name').value.trim();
+  if(!name){ toast('Enter patient name','error'); return; }
+  const phone = document.getElementById('walkin-phone').value.trim() || 'Walk-in';
+  const newToken = queue.length>0 ? queue[queue.length-1].token + 1 : currentToken + 1;
+  queue.push({
+    token: newToken,
+    name: name,
+    phone: phone,
+    time: new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true}),
+    status: 'waiting',
+    checkin: true
+  });
+  document.getElementById('walkin-name').value='';
+  document.getElementById('walkin-phone').value='';
+  toast('Token '+newToken+' → '+name,'success');
+  updateAll();
+}
+
+function callSpecific(token){
+  toast('Calling token '+token+' — SMS sent','success');
+  closeSheet();
+}
+
+function sendReminder(token){
+  toast('Reminder sent to token '+token,'success');
+  closeSheet();
+}
+
+function markCheckedIn(token){
+  const p = queue.find(q=>q.token===token);
+  if(p) p.checkin = true;
+  toast('Token '+token+' checked in','success');
+  closeSheet();
+  updateAll();
+}
+
+// ===== QUEUE LIST RENDER =====
+function renderQueueList(){
+  const el = document.getElementById('queue-list');
+  let items = [];
+  if(queueFilter==='all') items = [...completed.slice(-5).reverse(), ...queue];
+  else if(queueFilter==='waiting') items = queue.filter(q=>q.status==='waiting');
+  else items = completed.slice(-20).reverse();
+
+  if(!items.length){
+    el.innerHTML='<p class="text-sm text-gray-400 text-center py-8">No patients</p>';
+    return;
+  }
+
+  el.innerHTML = items.map(p=>{
+    const isServing = p.status==='serving';
+    const isDone = p.status==='done';
+    
+    let badge='';
+    if(isServing) badge='<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 text-[10px] font-bold"><span class="w-1.5 h-1.5 rounded-full bg-brand-500 live-dot"></span>Serving</span>';
+    else if(isDone) badge='<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent-50 text-accent-700 text-[10px] font-bold">Done</span>';
+    else if(p.checkin) badge='<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent-50 text-accent-700 text-[10px] font-bold">Checked In</span>';
+    else badge='<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-[10px] font-bold">Waiting</span>';
+
+    return `
+      <div class="q-row flex items-center gap-3 ${isDone?'opacity-50':''}" onclick="openPatientSheet(${p.token})">
+        <div class="w-11 h-11 rounded-xl ${isServing?'bg-brand-600 text-white':'bg-gray-100 text-gray-800'} flex items-center justify-center font-bold text-sm flex-shrink-0">${p.token}</div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold text-gray-900 truncate">${p.name}</p>
+          <p class="text-xs text-gray-400">${p.time} · ${p.phone}</p>
+        </div>
+        <div class="flex-shrink-0">${badge}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function setFilter(f){
+  queueFilter = f;
+  ['all','waiting','done'].forEach(k=>{
+    const btn = document.getElementById('f-'+k);
+    btn.className = 'px-3 py-1.5 rounded-lg text-xs font-'+(k===f?'bold bg-brand-50 text-brand-700':'semibold text-gray-500');
+  });
+  renderQueueList();
+}
+
+// ===== PATIENT SHEET =====
+function openPatientSheet(token){
+  const p = [...queue,...completed].find(q=>q.token===token);
+  if(!p) return;
+  window._sheetToken = token;
+  document.getElementById('ps-token').textContent = p.token;
+  document.getElementById('ps-name').textContent = p.name;
+  document.getElementById('ps-phone').textContent = p.phone;
+  document.getElementById('ps-checkin').textContent = p.time;
+  document.getElementById('ps-wait').textContent = p.status==='done'?'—':Math.floor(Math.random()*10+3)+' min';
+  document.getElementById('ps-status').textContent = p.status==='serving'?'Serving':p.status==='done'?'Done':p.checkin?'Checked In':'Waiting';
+  
+  document.getElementById('sheet-backdrop').classList.add('show');
+  document.getElementById('patient-sheet').classList.remove('hidden');
+}
+
+function closeSheet(){
+  document.getElementById('sheet-backdrop').classList.remove('show');
+  document.getElementById('patient-sheet').classList.add('hidden');
+}
+
+// ===== QR SCANNER =====
+function startScanner(){
+  const readerEl = document.getElementById('qr-reader');
+  if(scannerRunning) return;
+  
+  qrScanner = new Html5Qrcode("qr-reader");
+  qrScanner.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: { width: 220, height: 220 } },
+    onScanSuccess,
+    ()=>{}
+  ).then(()=>{
+    scannerRunning = true;
+    document.getElementById('btn-start-scan').classList.add('hidden');
+    document.getElementById('btn-stop-scan').classList.remove('hidden');
+  }).catch(err=>{
+    toast('Camera error: '+err,'error');
+  });
+}
+
+function stopScanner(){
+  if(qrScanner && scannerRunning){
+    qrScanner.stop().then(()=>{
+      scannerRunning = false;
+      document.getElementById('btn-start-scan').classList.remove('hidden');
+      document.getElementById('btn-stop-scan').classList.add('hidden');
+      document.getElementById('qr-reader').innerHTML='';
+    }).catch(()=>{});
+  }
+}
+
+function onScanSuccess(decodedText){
+  // Expect QR data like: TURNO|TOKEN:32|NAME:Arun|HOSP:Apollo
+  // Or just a token number
+  let token = null;
+  let name = null;
+  
+  if(decodedText.includes('TURNO|')){
+    const parts = decodedText.split('|');
+    parts.forEach(part=>{
+      if(part.startsWith('TOKEN:')) token = parseInt(part.split(':')[1]);
+      if(part.startsWith('NAME:')) name = part.split(':')[1];
+    });
+  } else {
+    token = parseInt(decodedText);
+  }
+  
+  if(!token || isNaN(token)){
+    toast('Invalid QR code','error');
+    return;
+  }
+  
+  // Check in the patient
+  const p = queue.find(q=>q.token===token);
+  if(p){
+    p.checkin = true;
+    name = name || p.name;
+    
+    // Show result
+    document.getElementById('scan-result').classList.remove('hidden');
+    document.getElementById('scan-token').textContent = token;
+    document.getElementById('scan-name').textContent = name;
+    
+    // Add to history
+    scanHistory.unshift({token, name, time: new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true})});
+    renderScanHistory();
+    
+    toast('Token '+token+' ('+name+') checked in!','success');
+    updateAll();
+    
+    // Vibrate if available
+    if(navigator.vibrate) navigator.vibrate(200);
+  } else {
+    toast('Token '+token+' not found in queue','error');
+  }
+  
+  // Brief pause before scanning again
+  stopScanner();
+  setTimeout(()=>{ /* user can restart manually */ }, 1500);
+}
+
+function manualCheckin(){
+  const token = parseInt(document.getElementById('manual-token').value);
+  if(!token || isNaN(token)){ toast('Enter valid token','error'); return; }
+  
+  const p = queue.find(q=>q.token===token);
+  if(p){
+    p.checkin = true;
+    document.getElementById('scan-result').classList.remove('hidden');
+    document.getElementById('scan-token').textContent = token;
+    document.getElementById('scan-name').textContent = p.name;
+    
+    scanHistory.unshift({token, name:p.name, time: new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true})});
+    renderScanHistory();
+    
+    toast('Token '+token+' ('+p.name+') checked in!','success');
+    document.getElementById('manual-token').value='';
+    updateAll();
+  } else {
+    toast('Token '+token+' not in queue','error');
+  }
+}
+
+function renderScanHistory(){
+  const el = document.getElementById('scan-history');
+  if(!scanHistory.length){ el.innerHTML='<p class="text-xs text-gray-400 text-center py-4">No scans yet today</p>'; return; }
+  el.innerHTML = scanHistory.slice(0,10).map(s=>`
+    <div class="flex items-center gap-3 py-2 border-b border-gray-50">
+      <span class="w-8 h-8 rounded-lg bg-brand-50 flex items-center justify-center text-xs font-bold text-brand-700">${s.token}</span>
+      <div class="flex-1"><p class="text-sm font-medium text-gray-900">${s.name}</p></div>
+      <span class="text-xs text-gray-400">${s.time}</span>
+    </div>
+  `).join('');
+}
+
+// ===== SETTINGS =====
+function saveSettings(){
+  const hosp = document.getElementById('inp-hosp').value.trim();
+  const dept = document.getElementById('inp-dept').value.trim();
+  const doc = document.getElementById('inp-doc').value.trim();
+  const start = parseInt(document.getElementById('inp-start').value)||1;
+  totalTokens = parseInt(document.getElementById('inp-total').value)||50;
+
+  // Update headers
+  document.getElementById('dash-hosp').textContent = hosp;
+  document.getElementById('dash-dept').textContent = dept;
+  document.getElementById('dash-doc').textContent = doc;
+
+  // Save to shared localStorage
+  try{
+    localStorage.setItem('turno-custom', JSON.stringify({hospital:hosp, dept:dept, doctor:doc, location:''}));
+  }catch(e){}
+  
+  toast('Settings saved','success');
+  nav('s-dash');
+}
+
+function resetQueue(){
+  if(!confirm('Reset the queue? This clears all progress.')) return;
+  currentToken = parseInt(document.getElementById('inp-start').value)||1;
+  totalTokens = parseInt(document.getElementById('inp-total').value)||50;
+  initQueue();
+  toast('Queue reset','success');
+  nav('s-dash');
+}
+
+// ===== TOAST =====
+function toast(msg, type){
+  const t = document.getElementById('toast');
+  const ic = document.getElementById('toast-icon');
+  document.getElementById('toast-msg').textContent = msg;
+  const map = {success:['check_circle','text-accent-500'],info:['info','text-brand-500'],warn:['warning','text-warn-500'],error:['error','text-danger-500']};
+  const [icon,color] = map[type]||map.success;
+  ic.textContent = icon;
+  ic.className = 'material-symbols-outlined fill text-[20px] '+color;
+  t.style.display='flex';
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(()=>{t.classList.remove('show');t.style.display='none';},2500);
+}
+
+// ===== CLOCK =====
+function updateClock(){
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:false});
+  document.querySelectorAll('#dash-time,#q-time,#sc-time,#set-time').forEach(el=>{
+    el.textContent = timeStr;
+  });
+}
+
+// ===== VIEW SWITCHER =====
+function setView(mode){
+  document.body.className = 'view-'+mode;
+  document.querySelectorAll('.vs-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('vs-'+mode).classList.add('active');
+  try{ localStorage.setItem('turno-view-mode', mode); }catch(e){}
+}
+
+// ===== INIT =====
+document.addEventListener('DOMContentLoaded',()=>{
+  // Restore view mode
+  try{
+    const savedView = localStorage.getItem('turno-view-mode');
+    if(savedView) setView(savedView);
+  }catch(e){}
+  // Load from shared localStorage
+  try{
+    const cust = JSON.parse(localStorage.getItem('turno-custom')||'null');
+    if(cust){
+      const h = cust.hospital||'Apollo Hospitals';
+      const d = cust.dept||'Dermatology';
+      const doc = cust.doctor||'Dr. Karthik R';
+      document.getElementById('dash-hosp').textContent = h;
+      document.getElementById('dash-dept').textContent = d;
+      document.getElementById('dash-doc').textContent = doc;
+      document.getElementById('inp-hosp').value = h;
+      document.getElementById('inp-dept').value = d;
+      document.getElementById('inp-doc').value = doc;
+    }
+  }catch(e){}
+  
+  initQueue();
+  updateClock();
+  setInterval(updateClock, 1000);
+});
+</script>
+</body>
+</html>
