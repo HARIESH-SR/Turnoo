@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"/>
+<title>Turno — Doctor</title>
+<meta name="theme-color" content="#1565C0"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script>
+tailwind.config={darkMode:'class',theme:{extend:{colors:{
+brand:{50:'#e3f2fd',100:'#bbdefb',200:'#90caf9',300:'#64b5f6',400:'#42a5f5',500:'#1E88E5',600:'#1565C0',700:'#0D47A1',800:'#0a3d8f',900:'#082e6b'},
+accent:{50:'#e8f5e9',100:'#c8e6c9',200:'#a5d6a7',300:'#81c784',400:'#66bb6a',500:'#4CAF50',600:'#43A047',700:'#388E3C'},
+warn:{50:'#fff3e0',100:'#ffe0b2',400:'#FFA726',500:'#FF9800',600:'#FB8C00'},
+danger:{50:'#fce4ec',500:'#E53935',600:'#D32F2F'},
+gray:{50:'#FAFAFA',100:'#F5F5F5',200:'#EEEEEE',300:'#E0E0E0',400:'#BDBDBD',500:'#9E9E9E',600:'#757575',700:'#616161',800:'#424242',900:'#212121'}
+},fontFamily:{sans:['Inter','system-ui','sans-serif']}}}}
+</script>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:'Inter',sans-serif;overscroll-behavior:none;background:#0D47A1;margin:0;display:flex;flex-direction:column;align-items:center;min-height:100vh;padding-top:60px}
+.material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;user-select:none}
+.material-symbols-outlined.fill{font-variation-settings:'FILL' 1}
+.hide-scrollbar::-webkit-scrollbar{display:none}
+.hide-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
+.screen{display:none;position:absolute;inset:0;flex-direction:column;background:#FAFAFA}
+.screen.active{display:flex}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes pulse2{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes toastIn{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
+.fade-up{animation:fadeUp .3s ease forwards}
+.live-dot{animation:pulse2 1.5s ease-in-out infinite}
+.pb-safe{padding-bottom:max(env(safe-area-inset-bottom,20px),20px)}
+
+/* View modes */
+#app{width:393px;height:852px;border-radius:44px;overflow:hidden;box-shadow:0 30px 90px rgba(0,0,0,.5);border:6px solid #222;position:relative;transition:all .4s cubic-bezier(.4,0,.2,1)}
+body.view-mobile #app{width:393px;height:852px;border-radius:44px;border:6px solid #222}
+body.view-tablet #app{width:768px;height:1024px;border-radius:28px;border:5px solid #333}
+body.view-desktop #app{width:100%;max-width:100%;height:calc(100vh - 60px);border-radius:0;border:none;box-shadow:none}
+
+@media (max-width:499px){
+  body{padding-top:0 !important}
+  #view-switcher{display:none !important}
+  #app{width:100% !important;min-height:100dvh !important;height:auto !important;border-radius:0 !important;border:none !important;box-shadow:none !important}
+}
+
+#view-switcher{position:fixed;top:0;left:0;right:0;z-index:999;height:52px;background:rgba(13,71,161,.95);backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;gap:4px;padding:0 16px;border-bottom:1px solid rgba(255,255,255,.1)}
+.vs-btn{padding:7px 16px;border-radius:10px;font-size:12px;font-weight:600;color:rgba(255,255,255,.6);cursor:pointer;display:flex;align-items:center;gap:6px;transition:all .2s;border:1px solid transparent}
+.vs-btn:hover{color:rgba(255,255,255,.85);background:rgba(255,255,255,.08)}
+.vs-btn.active{background:rgba(255,255,255,.15);color:white;border-color:rgba(255,255,255,.2)}
+.vs-btn .material-symbols-outlined{font-size:16px}
+
+#toast{position:absolute;top:60px;left:50%;transform:translateX(-50%);z-index:200;display:none;animation:toastIn .25s ease}
+#toast.show{display:flex}
+.sheet-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.5);z-index:150;display:none}
+.sheet-backdrop.show{display:block}
+.sheet{position:absolute;bottom:0;left:0;right:0;background:white;border-radius:24px 24px 0 0;z-index:160;animation:slideUp .3s ease;max-height:85%;overflow-y:auto}
+.progress-bar{height:8px;border-radius:4px;background:#E0E0E0;overflow:hidden}
+.progress-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#1E88E5,#42A5F5);transition:width .8s ease}
+input:focus,textarea:focus{outline:none;border-color:#1E88E5}
+@keyframes pulse-ring{0%{box-shadow:0 0 0 0 rgba(76,175,80,0.5)}100%{box-shadow:0 0 0 14px rgba(76,175,80,0)}}
+.consult-pulse{animation:pulse-ring 2s ease-in-out infinite}
+
+.tab-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 0;flex:1;cursor:pointer;opacity:.5;transition:all .2s}
+.tab-item.active{opacity:1}
+.tab-item.active .tab-icon{color:#1565C0}
+.tab-item.active .tab-label{color:#1565C0;font-weight:700}
+
+.q-row{border-bottom:1px solid #F5F5F5;padding:12px 0;transition:all .2s}
+.q-row:active{background:#F5F5F5;border-radius:12px}
+</style>
+</head>
+<body class="view-mobile">
+
+<!-- View Switcher Bar -->
+<div id="view-switcher">
+  <div class="vs-btn active" onclick="setView('mobile')" id="vs-mobile"><span class="material-symbols-outlined">smartphone</span>Mobile</div>
+  <div class="vs-btn" onclick="setView('tablet')" id="vs-tablet"><span class="material-symbols-outlined">tablet</span>Tablet</div>
+  <div class="vs-btn" onclick="setView('desktop')" id="vs-desktop"><span class="material-symbols-outlined">desktop_windows</span>Desktop</div>
+</div>
+
+<div id="app" class="bg-gray-50 relative overflow-hidden">
+
+<!-- Toast -->
+<div id="toast" class="bg-white rounded-xl px-4 py-3 shadow-lg flex items-center gap-2 text-sm font-medium max-w-[85%]">
+  <span class="material-symbols-outlined fill text-accent-500 text-[20px]" id="toast-icon">check_circle</span>
+  <span class="text-gray-900" id="toast-msg">Done</span>
+</div>
+
+<!-- Sheet Backdrop -->
+<div id="sheet-backdrop" class="sheet-backdrop" onclick="closeSheet()"></div>
+
+<!-- ============ SCREEN: HOME ============ -->
+<div id="s-home" class="screen active">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span id="home-clock">9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 pt-3 pb-4">
+    <div class="flex justify-between items-start">
+      <div>
+        <h1 class="text-lg font-bold text-gray-900" id="h-greeting">Good morning, Doctor 👋</h1>
+        <p class="text-xs text-gray-500 mt-0.5" id="h-date">Sunday, 1 June 2026</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <div id="status-badge" class="flex items-center gap-1.5 bg-accent-50 text-accent-700 text-xs font-bold px-3 py-1.5 rounded-full"><span class="w-2 h-2 rounded-full bg-accent-500 live-dot"></span>Available</div>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-24">
+    <div class="px-5 py-4 space-y-4">
+
+      <!-- Today's Stats -->
+      <div class="grid grid-cols-3 gap-3">
+        <div class="bg-white rounded-2xl p-3 shadow-sm text-center">
+          <p class="text-[10px] text-gray-400 mb-1">Seen</p>
+          <p class="text-2xl font-black text-accent-600" id="h-seen">17</p>
+        </div>
+        <div class="bg-white rounded-2xl p-3 shadow-sm text-center">
+          <p class="text-[10px] text-gray-400 mb-1">Remaining</p>
+          <p class="text-2xl font-black text-brand-600" id="h-remaining">14</p>
+        </div>
+        <div class="bg-white rounded-2xl p-3 shadow-sm text-center">
+          <p class="text-[10px] text-gray-400 mb-1">Avg. Time</p>
+          <p class="text-2xl font-black text-warn-600" id="h-avg">7<span class="text-xs font-bold text-gray-400">m</span></p>
+        </div>
+      </div>
+
+      <!-- Current Patient -->
+      <div class="bg-white rounded-2xl p-5 shadow-sm border-2 border-accent-500 consult-pulse">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-bold text-accent-600 uppercase tracking-wider">Now Consulting</span>
+          <span class="w-2.5 h-2.5 rounded-full bg-accent-500 live-dot"></span>
+        </div>
+        <div class="flex items-center gap-4 mb-4">
+          <div class="w-14 h-14 rounded-2xl bg-accent-50 flex items-center justify-center">
+            <span class="text-2xl font-black text-accent-700" id="h-c-token">18</span>
+          </div>
+          <div class="flex-1">
+            <p class="font-bold text-gray-900" id="h-c-name">Rajesh Kumar</p>
+            <p class="text-xs text-gray-500" id="h-c-info">Male, 42 yrs · First visit</p>
+            <p class="text-xs text-gray-400 mt-0.5" id="h-c-complaint">Complaint: Skin rash, itching</p>
+          </div>
+        </div>
+        <button onclick="markDone()" class="w-full bg-accent-500 text-white font-bold text-base py-3.5 rounded-xl active:scale-[0.97] flex items-center justify-center gap-2 shadow-lg shadow-accent-200/50">
+          <span class="material-symbols-outlined fill text-[20px]">check_circle</span>Done — Call Next
+        </button>
+      </div>
+
+      <!-- Up Next -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <h3 class="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2"><span class="material-symbols-outlined fill text-brand-500 text-[18px]">queue</span>Up Next</h3>
+        <div class="space-y-2" id="h-upnext"></div>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="grid grid-cols-2 gap-3">
+        <button onclick="toggleBreak()" id="btn-break" class="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3 active:scale-[0.97]">
+          <div class="w-10 h-10 rounded-xl bg-warn-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-warn-600 text-[22px]">coffee</span></div>
+          <div class="text-left"><p class="text-sm font-semibold text-gray-900">Take Break</p><p class="text-[10px] text-gray-400">Pause queue</p></div>
+        </button>
+        <button onclick="nav('s-history')" class="bg-white rounded-2xl p-4 shadow-sm flex items-center gap-3 active:scale-[0.97]">
+          <div class="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center"><span class="material-symbols-outlined fill text-purple-600 text-[22px]">history</span></div>
+          <div class="text-left"><p class="text-sm font-semibold text-gray-900">History</p><p class="text-[10px] text-gray-400">Past patients</p></div>
+        </button>
+      </div>
+
+      <!-- Today's Progress -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <div class="flex justify-between items-center mb-2">
+          <p class="text-sm font-bold text-gray-900">Today's Progress</p>
+          <p class="text-sm font-bold text-brand-600" id="h-pct">55%</p>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="h-fill" style="width:55%"></div></div>
+        <div class="flex justify-between text-xs text-gray-400 mt-2"><span>0 patients</span><span id="h-total-label">31 total</span></div>
+      </div>
+
+    </div>
+  </main>
+
+  <nav class="absolute bottom-0 w-full z-50 bg-white border-t border-gray-200 flex justify-around items-start px-2 pt-2 pb-safe">
+    <div class="tab-item active" onclick="nav('s-home')"><span class="material-symbols-outlined fill tab-icon text-[22px]">home</span><span class="tab-label text-[10px] text-gray-600">Home</span></div>
+    <div class="tab-item" onclick="nav('s-patients')"><span class="material-symbols-outlined fill tab-icon text-[22px]">groups</span><span class="tab-label text-[10px] text-gray-600">Patients</span></div>
+    <div class="tab-item" onclick="nav('s-consult')"><span class="material-symbols-outlined fill tab-icon text-[22px]">stethoscope</span><span class="tab-label text-[10px] text-gray-600">Consult</span></div>
+    <div class="tab-item" onclick="nav('s-settings')"><span class="material-symbols-outlined fill tab-icon text-[22px]">settings</span><span class="tab-label text-[10px] text-gray-600">Settings</span></div>
+  </nav>
+</div>
+
+<!-- ============ SCREEN: PATIENTS LIST ============ -->
+<div id="s-patients" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span id="p-clock">9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center justify-between border-b border-gray-100">
+    <h1 class="text-lg font-bold text-gray-900">Today's Patients</h1>
+    <div class="flex items-center gap-2">
+      <button onclick="setPatientFilter('all')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-brand-50 text-brand-700" id="pf-all">All</button>
+      <button onclick="setPatientFilter('waiting')" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-500" id="pf-waiting">Waiting</button>
+      <button onclick="setPatientFilter('done')" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-500" id="pf-done">Done</button>
+    </div>
+  </header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-24">
+    <div class="px-5 py-3" id="patient-list"></div>
+  </main>
+  <nav class="absolute bottom-0 w-full z-50 bg-white border-t border-gray-200 flex justify-around items-start px-2 pt-2 pb-safe">
+    <div class="tab-item" onclick="nav('s-home')"><span class="material-symbols-outlined fill tab-icon text-[22px]">home</span><span class="tab-label text-[10px] text-gray-600">Home</span></div>
+    <div class="tab-item active" onclick="nav('s-patients')"><span class="material-symbols-outlined fill tab-icon text-[22px]">groups</span><span class="tab-label text-[10px] text-gray-600">Patients</span></div>
+    <div class="tab-item" onclick="nav('s-consult')"><span class="material-symbols-outlined fill tab-icon text-[22px]">stethoscope</span><span class="tab-label text-[10px] text-gray-600">Consult</span></div>
+    <div class="tab-item" onclick="nav('s-settings')"><span class="material-symbols-outlined fill tab-icon text-[22px]">settings</span><span class="tab-label text-[10px] text-gray-600">Settings</span></div>
+  </nav>
+</div>
+
+<!-- ============ SCREEN: CONSULT ============ -->
+<div id="s-consult" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span id="c-clock">9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 border-b border-gray-100">
+    <h1 class="text-lg font-bold text-gray-900">Consultation</h1>
+    <p class="text-xs text-gray-500 mt-0.5">Current patient details & notes</p>
+  </header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-24">
+    <div class="px-5 py-4 space-y-4">
+
+      <!-- Patient Info Card -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-brand-100">
+        <div class="flex items-center gap-4 mb-3">
+          <div class="w-14 h-14 rounded-2xl bg-brand-50 flex items-center justify-center">
+            <span class="text-2xl font-black text-brand-600" id="con-token">18</span>
+          </div>
+          <div class="flex-1">
+            <p class="font-bold text-gray-900 text-lg" id="con-name">Rajesh Kumar</p>
+            <p class="text-sm text-gray-500" id="con-age">Male, 42 years</p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs text-gray-400">Token</p>
+            <p class="text-xs text-gray-400 mt-1">Visit</p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs font-bold text-brand-600" id="con-tkn2">#18</p>
+            <p class="text-xs font-bold text-gray-600 mt-1" id="con-visit">1st</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <div class="bg-gray-50 rounded-xl p-2.5 text-center"><p class="text-[9px] text-gray-400">Phone</p><p class="text-xs font-semibold text-gray-700" id="con-phone">98765 4XXXX</p></div>
+          <div class="bg-gray-50 rounded-xl p-2.5 text-center"><p class="text-[9px] text-gray-400">Wait Time</p><p class="text-xs font-semibold text-brand-600" id="con-wait">6 min</p></div>
+          <div class="bg-gray-50 rounded-xl p-2.5 text-center"><p class="text-[9px] text-gray-400">Check-in</p><p class="text-xs font-semibold text-gray-700" id="con-checkin">10:02 AM</p></div>
+        </div>
+      </div>
+
+      <!-- Complaint -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <h3 class="text-sm font-bold text-gray-900 mb-2 flex items-center gap-2"><span class="material-symbols-outlined text-warn-500 text-[18px]">report</span>Chief Complaint</h3>
+        <p class="text-sm text-gray-700 bg-warn-50 rounded-xl p-3" id="con-complaint">Skin rash on arms and neck for 2 weeks. Itching increases at night. No fever.</p>
+      </div>
+
+      <!-- Vitals (if available) -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <h3 class="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2"><span class="material-symbols-outlined text-danger-500 text-[18px]">monitor_heart</span>Vitals</h3>
+        <div class="grid grid-cols-4 gap-2">
+          <div class="bg-red-50 rounded-xl p-2 text-center"><p class="text-[9px] text-gray-500">BP</p><p class="text-xs font-bold text-gray-900" id="v-bp">120/80</p></div>
+          <div class="bg-blue-50 rounded-xl p-2 text-center"><p class="text-[9px] text-gray-500">Pulse</p><p class="text-xs font-bold text-gray-900" id="v-pulse">72</p></div>
+          <div class="bg-orange-50 rounded-xl p-2 text-center"><p class="text-[9px] text-gray-500">Temp</p><p class="text-xs font-bold text-gray-900" id="v-temp">98.4°F</p></div>
+          <div class="bg-purple-50 rounded-xl p-2 text-center"><p class="text-[9px] text-gray-500">SpO2</p><p class="text-xs font-bold text-gray-900" id="v-spo2">98%</p></div>
+        </div>
+      </div>
+
+      <!-- Past Records for Current Patient -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <h3 class="text-sm font-bold text-gray-900 mb-2 flex items-center gap-2"><span class="material-symbols-outlined text-purple-500 text-[18px]">folder_open</span>Past Records</h3>
+        <div id="con-records" class="space-y-2 max-h-36 overflow-y-auto hide-scrollbar"></div>
+      </div>
+
+      <!-- Doctor Notes -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <h3 class="text-sm font-bold text-gray-900 mb-2 flex items-center gap-2"><span class="material-symbols-outlined text-brand-500 text-[18px]">edit_note</span>Diagnosis / Notes</h3>
+        <textarea id="con-notes" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm resize-none h-20" placeholder="Type diagnosis, observations..."></textarea>
+      </div>
+
+      <!-- Prescription -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-accent-100">
+        <h3 class="text-sm font-bold text-gray-900 mb-2 flex items-center gap-2"><span class="material-symbols-outlined fill text-accent-500 text-[18px]">medication</span>Prescription</h3>
+        <textarea id="con-rx" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm resize-none h-24" placeholder="e.g. Tab Cetirizine 10mg — 1 OD x 5 days&#10;Betamethasone cream — apply BD x 1 week"></textarea>
+        <div class="flex flex-wrap gap-2 mt-3" id="rx-tags">
+          <button onclick="addRxTag(this,'Tab Cetirizine 10mg — 1 OD x 5d')" class="px-3 py-1.5 rounded-full bg-gray-100 text-xs font-semibold text-gray-700 active:scale-95">Cetirizine</button>
+          <button onclick="addRxTag(this,'Cap Amoxicillin 500mg — 1 TDS x 5d')" class="px-3 py-1.5 rounded-full bg-gray-100 text-xs font-semibold text-gray-700 active:scale-95">Amoxicillin</button>
+          <button onclick="addRxTag(this,'Betamethasone cream — apply BD')" class="px-3 py-1.5 rounded-full bg-gray-100 text-xs font-semibold text-gray-700 active:scale-95">Cream/Ointment</button>
+          <button onclick="addRxTag(this,'Tab Paracetamol 650mg — SOS')" class="px-3 py-1.5 rounded-full bg-gray-100 text-xs font-semibold text-gray-700 active:scale-95">Paracetamol</button>
+          <button onclick="addRxTag(this,'Blood test: CBC, ESR')" class="px-3 py-1.5 rounded-full bg-gray-100 text-xs font-semibold text-gray-700 active:scale-95">Blood test</button>
+          <button onclick="addRxTag(this,'Follow-up after 1 week')" class="px-3 py-1.5 rounded-full bg-gray-100 text-xs font-semibold text-gray-700 active:scale-95">Follow-up</button>
+        </div>
+      </div>
+
+      <!-- Quick Tags -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <h3 class="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2"><span class="material-symbols-outlined text-warn-500 text-[18px]">label</span>Quick Flags</h3>
+        <div class="flex flex-wrap gap-2" id="flag-tags">
+          <button onclick="addTag(this)" class="px-3 py-1.5 rounded-full bg-gray-100 text-xs font-semibold text-gray-700 active:scale-95">Refer specialist</button>
+          <button onclick="addTag(this)" class="px-3 py-1.5 rounded-full bg-gray-100 text-xs font-semibold text-gray-700 active:scale-95">Allergy noted</button>
+          <button onclick="addTag(this)" class="px-3 py-1.5 rounded-full bg-gray-100 text-xs font-semibold text-gray-700 active:scale-95">Rest advised</button>
+          <button onclick="addTag(this)" class="px-3 py-1.5 rounded-full bg-gray-100 text-xs font-semibold text-gray-700 active:scale-95">Urgent</button>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <button onclick="postPrescription()" class="w-full bg-brand-600 text-white font-bold text-base py-4 rounded-xl active:scale-[0.97] flex items-center justify-center gap-2 shadow-lg shadow-brand-200/50">
+        <span class="material-symbols-outlined fill text-[20px]">save</span>Save Prescription
+      </button>
+      <button onclick="markDone()" class="w-full bg-accent-500 text-white font-bold text-base py-4 rounded-xl active:scale-[0.97] flex items-center justify-center gap-2 shadow-lg shadow-accent-200/50">
+        <span class="material-symbols-outlined fill text-[20px]">check_circle</span>Complete & Call Next
+      </button>
+      <button onclick="skipPatient()" class="w-full bg-warn-50 text-warn-600 font-semibold text-sm py-3 rounded-xl active:scale-[0.97] flex items-center justify-center gap-2">
+        <span class="material-symbols-outlined text-[18px]">redo</span>Skip — Patient Not Ready
+      </button>
+    </div>
+  </main>
+  <nav class="absolute bottom-0 w-full z-50 bg-white border-t border-gray-200 flex justify-around items-start px-2 pt-2 pb-safe">
+    <div class="tab-item" onclick="nav('s-home')"><span class="material-symbols-outlined fill tab-icon text-[22px]">home</span><span class="tab-label text-[10px] text-gray-600">Home</span></div>
+    <div class="tab-item" onclick="nav('s-patients')"><span class="material-symbols-outlined fill tab-icon text-[22px]">groups</span><span class="tab-label text-[10px] text-gray-600">Patients</span></div>
+    <div class="tab-item active" onclick="nav('s-consult')"><span class="material-symbols-outlined fill tab-icon text-[22px]">stethoscope</span><span class="tab-label text-[10px] text-gray-600">Consult</span></div>
+    <div class="tab-item" onclick="nav('s-settings')"><span class="material-symbols-outlined fill tab-icon text-[22px]">settings</span><span class="tab-label text-[10px] text-gray-600">Settings</span></div>
+  </nav>
+</div>
+
+<!-- ============ SCREEN: HISTORY ============ -->
+<div id="s-history" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span id="hi-clock">9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 flex items-center gap-3 border-b border-gray-100">
+    <button onclick="nav('s-home')" class="text-gray-700 active:opacity-60"><span class="material-symbols-outlined">arrow_back</span></button>
+    <h1 class="text-lg font-bold text-gray-900">Today's History</h1>
+  </header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-24">
+    <div class="px-5 py-3" id="history-list"></div>
+  </main>
+  <nav class="absolute bottom-0 w-full z-50 bg-white border-t border-gray-200 flex justify-around items-start px-2 pt-2 pb-safe">
+    <div class="tab-item" onclick="nav('s-home')"><span class="material-symbols-outlined fill tab-icon text-[22px]">home</span><span class="tab-label text-[10px] text-gray-600">Home</span></div>
+    <div class="tab-item" onclick="nav('s-patients')"><span class="material-symbols-outlined fill tab-icon text-[22px]">groups</span><span class="tab-label text-[10px] text-gray-600">Patients</span></div>
+    <div class="tab-item" onclick="nav('s-consult')"><span class="material-symbols-outlined fill tab-icon text-[22px]">stethoscope</span><span class="tab-label text-[10px] text-gray-600">Consult</span></div>
+    <div class="tab-item" onclick="nav('s-settings')"><span class="material-symbols-outlined fill tab-icon text-[22px]">settings</span><span class="tab-label text-[10px] text-gray-600">Settings</span></div>
+  </nav>
+</div>
+
+<!-- ============ SCREEN: SETTINGS ============ -->
+<div id="s-settings" class="screen">
+  <div class="bg-white px-5 pt-3 pb-0 flex justify-between items-center text-xs text-gray-500 font-medium"><span id="set-clock">9:41</span><div class="flex items-center gap-1"><span class="material-symbols-outlined text-[14px]">signal_cellular_alt</span><span class="material-symbols-outlined text-[14px]">wifi</span><span class="material-symbols-outlined text-[14px]">battery_full</span></div></div>
+  <header class="bg-white px-5 py-3 border-b border-gray-100">
+    <h1 class="text-lg font-bold text-gray-900">Settings</h1>
+    <p class="text-xs text-gray-500 mt-0.5">Your profile & preferences</p>
+  </header>
+  <main class="flex-1 overflow-y-auto hide-scrollbar pb-24">
+    <div class="px-5 py-4 space-y-4">
+
+      <!-- Profile -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center gap-4 mb-4">
+          <div class="w-14 h-14 rounded-full bg-brand-100 flex items-center justify-center"><span class="material-symbols-outlined fill text-brand-600 text-[28px]">person</span></div>
+          <div>
+            <p class="font-bold text-gray-900" id="set-name">Dr. Karthik R</p>
+            <p class="text-xs text-gray-500" id="set-spec">Dermatology</p>
+          </div>
+        </div>
+        <div class="space-y-3">
+          <div><label class="text-xs font-semibold text-gray-500 mb-1 block">Doctor Name</label><input id="inp-doc" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" value="Dr. Karthik R"/></div>
+          <div><label class="text-xs font-semibold text-gray-500 mb-1 block">Specialization</label><input id="inp-spec" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" value="Dermatology"/></div>
+          <div><label class="text-xs font-semibold text-gray-500 mb-1 block">Hospital / Clinic</label><input id="inp-hosp" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" value="Apollo Hospitals"/></div>
+        </div>
+      </div>
+
+      <!-- Consultation Settings -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm space-y-3">
+        <h3 class="text-sm font-bold text-gray-900 flex items-center gap-2"><span class="material-symbols-outlined fill text-brand-500 text-[18px]">tune</span>Consultation</h3>
+        <div class="grid grid-cols-2 gap-3">
+          <div><label class="text-xs font-semibold text-gray-500 mb-1 block">Avg. Time (min)</label><input id="inp-avgtime" type="number" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" value="7"/></div>
+          <div><label class="text-xs font-semibold text-gray-500 mb-1 block">Max Patients/Day</label><input id="inp-max" type="number" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" value="50"/></div>
+        </div>
+        <div><label class="text-xs font-semibold text-gray-500 mb-1 block">OPD Timings</label><input id="inp-timing" class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm" value="9:00 AM - 1:00 PM, 4:00 PM - 8:00 PM"/></div>
+      </div>
+
+      <!-- Actions -->
+      <button onclick="saveDocSettings()" class="w-full bg-brand-600 text-white font-bold text-base py-4 rounded-xl active:scale-[0.97] shadow-lg shadow-brand-200/50">Save Settings</button>
+
+      <!-- App Info -->
+      <div class="bg-white rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center gap-3">
+          <div class="w-11 h-11 rounded-xl bg-brand-600 flex items-center justify-center"><span class="material-symbols-outlined fill text-white text-[24px]">stethoscope</span></div>
+          <div>
+            <p class="font-bold text-gray-900 text-sm">Turno Doctor</p>
+            <p class="text-xs text-gray-500">v1.0 · Queue Management</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <nav class="absolute bottom-0 w-full z-50 bg-white border-t border-gray-200 flex justify-around items-start px-2 pt-2 pb-safe">
+    <div class="tab-item" onclick="nav('s-home')"><span class="material-symbols-outlined fill tab-icon text-[22px]">home</span><span class="tab-label text-[10px] text-gray-600">Home</span></div>
+    <div class="tab-item" onclick="nav('s-patients')"><span class="material-symbols-outlined fill tab-icon text-[22px]">groups</span><span class="tab-label text-[10px] text-gray-600">Patients</span></div>
+    <div class="tab-item" onclick="nav('s-consult')"><span class="material-symbols-outlined fill tab-icon text-[22px]">stethoscope</span><span class="tab-label text-[10px] text-gray-600">Consult</span></div>
+    <div class="tab-item active" onclick="nav('s-settings')"><span class="material-symbols-outlined fill tab-icon text-[22px]">settings</span><span class="tab-label text-[10px] text-gray-600">Settings</span></div>
+  </nav>
+</div>
+
+<!-- ============ PATIENT DETAIL SHEET ============ -->
+<div id="patient-sheet" class="sheet hidden" style="padding:24px 20px 40px">
+  <div class="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-5"></div>
+  <div class="flex items-center gap-4 mb-4">
+    <div class="w-14 h-14 rounded-2xl bg-brand-50 flex items-center justify-center"><span class="text-2xl font-black text-brand-600" id="ps-token">—</span></div>
+    <div>
+      <p class="font-bold text-gray-900 text-lg" id="ps-name">—</p>
+      <p class="text-sm text-gray-500" id="ps-info">—</p>
+    </div>
+  </div>
+  <div class="grid grid-cols-3 gap-3 mb-4">
+    <div class="bg-gray-50 rounded-xl p-3 text-center"><p class="text-xs text-gray-400">Time</p><p class="text-sm font-bold text-gray-900" id="ps-time">—</p></div>
+    <div class="bg-gray-50 rounded-xl p-3 text-center"><p class="text-xs text-gray-400">Wait</p><p class="text-sm font-bold text-brand-600" id="ps-wait">—</p></div>
+    <div class="bg-gray-50 rounded-xl p-3 text-center"><p class="text-xs text-gray-400">Visit</p><p class="text-sm font-bold text-gray-900" id="ps-visit">—</p></div>
+  </div>
+  <div class="bg-warn-50 rounded-xl p-3 mb-4">
+    <p class="text-xs font-semibold text-gray-600">Complaint:</p>
+    <p class="text-sm text-gray-800 mt-1" id="ps-complaint">—</p>
+  </div>
+
+  <!-- Past Records -->
+  <div class="mb-4">
+    <h4 class="text-sm font-bold text-gray-900 mb-2 flex items-center gap-2"><span class="material-symbols-outlined text-purple-500 text-[18px]">folder_open</span>Past Records</h4>
+    <div id="ps-records" class="space-y-2 max-h-40 overflow-y-auto hide-scrollbar"></div>
+  </div>
+
+  <button onclick="callPatient(window._sheetToken)" class="w-full bg-brand-600 text-white font-bold py-3.5 rounded-xl active:scale-[0.97] flex items-center justify-center gap-2"><span class="material-symbols-outlined text-[18px]">call</span>Call This Patient Now</button>
+</div>
+
+</div><!-- end #app -->
+
+<script>
+// ===== STATE =====
+let currentToken = 18;
+let queue = [];
+let completed = [];
+let totalPatients = 31;
+let onBreak = false;
+let patientFilter = 'all';
+let prescriptions = {}; // keyed by patient name
+
+// Load saved prescriptions
+try { prescriptions = JSON.parse(localStorage.getItem('turno-prescriptions')||'{}'); } catch(e){}
+
+// Sample past records (simulated historical visits)
+const PAST_RECORDS = {
+  'Rajesh Kumar': [
+    {date:'15 May 2026',complaint:'Contact dermatitis, left arm',diagnosis:'Allergic contact dermatitis',rx:'Tab Cetirizine 10mg OD x 5d, Calamine lotion'},
+    {date:'22 Mar 2026',complaint:'Fungal infection, groin area',diagnosis:'Tinea cruris',rx:'Clotrimazole cream BD x 2 weeks, Tab Fluconazole 150mg stat'}
+  ],
+  'Priya Sharma': [
+    {date:'10 May 2026',complaint:'Acne vulgaris, face',diagnosis:'Grade 2 acne',rx:'Adapalene gel HS, Clindamycin lotion BD'}
+  ],
+  'Mohammed Ismail': [
+    {date:'28 Apr 2026',complaint:'Psoriasis, scalp',diagnosis:'Scalp psoriasis',rx:'Clobetasol shampoo alternate days, Coal tar lotion'},
+    {date:'2 Feb 2026',complaint:'Dry skin, generalised',diagnosis:'Xerosis / ichthyosis',rx:'Emollient cream BD, avoid soap'}
+  ],
+  'Lakshmi N': [
+    {date:'5 May 2026',complaint:'Hair fall, diffuse',diagnosis:'Telogen effluvium',rx:'Tab Biotin 5mg OD, Minoxidil 2% topical'}
+  ],
+  'Kavitha R': [
+    {date:'18 Apr 2026',complaint:'Wart, right thumb',diagnosis:'Verruca vulgaris',rx:'Cryotherapy done, Salicylic acid paint'},
+    {date:'1 Mar 2026',complaint:'Wart, right thumb',diagnosis:'Verruca vulgaris',rx:'Podophyllin application'}
+  ],
+  'Ganesh P': [
+    {date:'20 May 2026',complaint:'Itching all over body at night',diagnosis:'Scabies',rx:'Permethrin 5% cream — apply neck down at night, wash after 8hrs. Treat family.'}
+  ]
+};
+
+const NAMES = ['Rajesh Kumar','Priya Sharma','Anitha V','Mohammed Ismail','Lakshmi N','Suresh B','Kavitha R','Dinesh M','Fatima Khan','Ganesh P','Revathi S','Arun Kumar','Deepa M','Srinivas R','Meena K','Pooja R','Vikram S','Nandini B','Karthik V','Uma Devi'];
+const COMPLAINTS = ['Skin rash on arms and neck for 2 weeks. Itching increases at night.','Acne breakout on face, recurring. Tried OTC creams.','Dark patches on cheeks, 3 months. No itching.','Hair fall, thinning at crown. Family history of baldness.','Eczema flare-up on hands. Cracks and bleeding.','Fungal infection between toes, 1 week.','Psoriasis patches on elbows, scaling.','Wart on right hand, growing in size.','Allergic reaction after new soap usage.','Dandruff and scalp itching for 1 month.'];
+const AGES = ['Male, 42 yrs','Female, 35 yrs','Female, 28 yrs','Male, 55 yrs','Female, 60 yrs','Male, 48 yrs','Female, 32 yrs','Male, 25 yrs','Female, 45 yrs','Male, 38 yrs','Female, 52 yrs','Male, 29 yrs','Female, 41 yrs','Male, 63 yrs','Female, 22 yrs','Female, 30 yrs','Male, 47 yrs','Female, 36 yrs','Male, 50 yrs','Female, 27 yrs'];
+
+// ===== NAVIGATION =====
+let curScreen = 's-home';
+function nav(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  curScreen = id;
+  const screenEl = document.getElementById(id);
+  screenEl.querySelectorAll('.tab-item').forEach(t=>{
+    const onclick = t.getAttribute('onclick');
+    t.classList.toggle('active', onclick && onclick.includes(id));
+  });
+  if(id==='s-patients') renderPatientList();
+  if(id==='s-history') renderHistory();
+}
+
+// ===== INIT =====
+function initQueue(){
+  queue = []; completed = [];
+  for(let i=1; i<currentToken; i++){
+    completed.push({token:i, name:NAMES[(i-1)%NAMES.length], age:AGES[(i-1)%AGES.length], complaint:COMPLAINTS[(i-1)%COMPLAINTS.length], time:formatTime(9,(i-1)*7), visit: Math.random()>0.7?'Follow-up':'1st', notes:''});
+  }
+  for(let i=currentToken; i<=Math.min(currentToken+13, totalPatients); i++){
+    queue.push({token:i, name:NAMES[(i-1)%NAMES.length], age:AGES[(i-1)%AGES.length], complaint:COMPLAINTS[(i-1)%COMPLAINTS.length], time:formatTime(9,(i-1)*7), status:i===currentToken?'consulting':'waiting', visit: Math.random()>0.7?'Follow-up':'1st', checkin:i<=currentToken+5});
+  }
+  updateAll();
+}
+
+function formatTime(h, totalMin){
+  const hours = h + Math.floor(totalMin/60);
+  const mins = totalMin % 60;
+  const ampm = hours>=12?'PM':'AM';
+  const h12 = hours>12?hours-12:hours===0?12:hours;
+  return h12+':'+String(mins).padStart(2,'0')+' '+ampm;
+}
+
+function updateAll(){
+  updateHome();
+  if(curScreen==='s-patients') renderPatientList();
+}
+
+function updateHome(){
+  const seen = completed.length;
+  const remaining = queue.filter(q=>q.status==='waiting').length;
+  document.getElementById('h-seen').textContent = seen;
+  document.getElementById('h-remaining').textContent = remaining;
+  document.getElementById('h-avg').innerHTML = (Math.floor(Math.random()*3)+6)+'<span class="text-xs font-bold text-gray-400">m</span>';
+  
+  const pct = Math.round((seen/totalPatients)*100);
+  document.getElementById('h-pct').textContent = pct+'%';
+  document.getElementById('h-fill').style.width = pct+'%';
+  document.getElementById('h-total-label').textContent = totalPatients+' total';
+
+  // Current patient
+  const cur = queue.find(q=>q.status==='consulting');
+  if(cur){
+    document.getElementById('h-c-token').textContent = cur.token;
+    document.getElementById('h-c-name').textContent = cur.name;
+    document.getElementById('h-c-info').textContent = cur.age+' · '+cur.visit;
+    document.getElementById('h-c-complaint').textContent = 'Complaint: '+cur.complaint.slice(0,50)+'...';
+    // Consult screen
+    document.getElementById('con-token').textContent = cur.token;
+    document.getElementById('con-name').textContent = cur.name;
+    document.getElementById('con-age').textContent = cur.age;
+    document.getElementById('con-tkn2').textContent = '#'+cur.token;
+    document.getElementById('con-visit').textContent = cur.visit;
+    document.getElementById('con-phone').textContent = '9'+Math.floor(Math.random()*9000+1000)+' XXXXX';
+    document.getElementById('con-wait').textContent = Math.floor(Math.random()*8+3)+' min';
+    document.getElementById('con-checkin').textContent = cur.time;
+    document.getElementById('con-complaint').textContent = cur.complaint;
+    // Render past records for current patient
+    renderPastRecords(cur.name, 'con-records');
+  }
+
+  // Up next
+  const upnext = queue.filter(q=>q.status==='waiting').slice(0,3);
+  document.getElementById('h-upnext').innerHTML = upnext.map(p=>`
+    <div class="flex items-center gap-3 py-2 border-b border-gray-50">
+      <span class="w-9 h-9 rounded-xl bg-brand-50 flex items-center justify-center text-sm font-bold text-brand-600">${p.token}</span>
+      <div class="flex-1 min-w-0"><p class="text-sm font-medium text-gray-900 truncate">${p.name}</p><p class="text-xs text-gray-400 truncate">${p.complaint.slice(0,35)}...</p></div>
+      <span class="text-xs text-gray-400">${p.time}</span>
+    </div>
+  `).join('') || '<p class="text-xs text-gray-400 py-2">No more patients waiting</p>';
+
+  // Greeting
+  const h = new Date().getHours();
+  const greet = h<12?'Good morning':h<17?'Good afternoon':'Good evening';
+  document.getElementById('h-greeting').textContent = greet+', Doctor 👋';
+  document.getElementById('h-date').textContent = new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+}
+
+// ===== ACTIONS =====
+function markDone(){
+  const cur = queue.find(q=>q.status==='consulting');
+  if(cur){
+    // Auto-save prescription if not already saved
+    const rx = document.getElementById('con-rx').value.trim();
+    const notes = document.getElementById('con-notes').value.trim();
+    if(rx || notes){
+      const record = {
+        date: new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}),
+        complaint: cur.complaint,
+        diagnosis: notes || '—',
+        rx: rx || '—',
+        token: cur.token
+      };
+      if(!prescriptions[cur.name]) prescriptions[cur.name] = [];
+      // Avoid duplicate if already saved via postPrescription
+      const existing = prescriptions[cur.name];
+      if(!existing.length || existing[existing.length-1].token !== cur.token){
+        prescriptions[cur.name].push(record);
+        localStorage.setItem('turno-prescriptions', JSON.stringify(prescriptions));
+      }
+    }
+    cur.status='done';
+    cur.notes = notes;
+    cur.rx = rx;
+    completed.push(cur);
+    queue = queue.filter(q=>q!==cur);
+    document.getElementById('con-notes').value='';
+    document.getElementById('con-rx').value='';
+    // Reset tags
+    document.querySelectorAll('#rx-tags button, #flag-tags button').forEach(b=>{b.classList.remove('bg-brand-600','text-white','bg-accent-100','text-accent-700');b.classList.add('bg-gray-100','text-gray-700');});
+  }
+  currentToken++;
+  const next = queue[0];
+  if(next){
+    next.status='consulting';
+    toast('Token '+next.token+' — '+next.name,'success');
+  } else {
+    toast('All patients done for today! 🎉','success');
+  }
+  updateAll();
+}
+
+function skipPatient(){
+  const cur = queue.find(q=>q.status==='consulting');
+  if(cur){
+    cur.status='waiting';
+    queue = queue.filter(q=>q!==cur);
+    queue.splice(Math.min(3,queue.length),0,cur);
+    currentToken++;
+    if(queue[0]) queue[0].status='consulting';
+    toast('Token '+cur.token+' moved back','warn');
+  }
+  updateAll();
+}
+
+function toggleBreak(){
+  onBreak = !onBreak;
+  const badge = document.getElementById('status-badge');
+  const btn = document.getElementById('btn-break');
+  if(onBreak){
+    badge.innerHTML='<span class="w-2 h-2 rounded-full bg-warn-500"></span>On Break';
+    badge.className='flex items-center gap-1.5 bg-warn-50 text-warn-700 text-xs font-bold px-3 py-1.5 rounded-full';
+    toast('Queue paused — On break','warn');
+  } else {
+    badge.innerHTML='<span class="w-2 h-2 rounded-full bg-accent-500 live-dot"></span>Available';
+    badge.className='flex items-center gap-1.5 bg-accent-50 text-accent-700 text-xs font-bold px-3 py-1.5 rounded-full';
+    toast('Back online — Queue resumed','success');
+  }
+}
+
+function addTag(btn){
+  btn.classList.toggle('bg-gray-100');
+  btn.classList.toggle('text-gray-700');
+  btn.classList.toggle('bg-brand-600');
+  btn.classList.toggle('text-white');
+}
+
+function addRxTag(btn, text){
+  const ta = document.getElementById('con-rx');
+  const val = ta.value.trim();
+  if(val && !val.endsWith('\n')) ta.value += '\n';
+  ta.value += text + '\n';
+  btn.classList.add('bg-accent-100','text-accent-700');
+  btn.classList.remove('bg-gray-100','text-gray-700');
+}
+
+function postPrescription(){
+  const cur = queue.find(q=>q.status==='consulting');
+  if(!cur){toast('No patient being consulted','warn');return;}
+  const rx = document.getElementById('con-rx').value.trim();
+  const notes = document.getElementById('con-notes').value.trim();
+  if(!rx && !notes){toast('Please enter prescription or notes','warn');return;}
+  const record = {
+    date: new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}),
+    complaint: cur.complaint,
+    diagnosis: notes || '—',
+    rx: rx || '—',
+    token: cur.token
+  };
+  if(!prescriptions[cur.name]) prescriptions[cur.name] = [];
+  prescriptions[cur.name].push(record);
+  localStorage.setItem('turno-prescriptions', JSON.stringify(prescriptions));
+  toast('Prescription saved for '+cur.name,'success');
+}
+
+function getPastRecords(name){
+  const saved = prescriptions[name] || [];
+  const sample = PAST_RECORDS[name] || [];
+  return [...sample, ...saved];
+}
+
+function renderPastRecords(name, targetId){
+  const records = getPastRecords(name);
+  const el = document.getElementById(targetId);
+  if(!records.length){
+    el.innerHTML='<p class="text-xs text-gray-400 py-2">No past records for this patient</p>';
+    return;
+  }
+  el.innerHTML = records.map(r=>`
+    <div class="bg-gray-50 rounded-xl p-3 border border-gray-100">
+      <div class="flex justify-between items-center mb-1">
+        <span class="text-[10px] font-bold text-gray-500">${r.date}</span>
+        <span class="text-[10px] text-gray-400">${r.complaint ? r.complaint.slice(0,30)+'...' : ''}</span>
+      </div>
+      <p class="text-xs text-gray-700"><span class="font-semibold">Dx:</span> ${r.diagnosis}</p>
+      <p class="text-xs text-accent-700 mt-0.5"><span class="font-semibold">Rx:</span> ${r.rx}</p>
+    </div>
+  `).join('');
+}
+
+function callPatient(token){
+  const p = queue.find(q=>q.token===token);
+  if(p){
+    // Make this patient current
+    const cur = queue.find(q=>q.status==='consulting');
+    if(cur) cur.status='waiting';
+    p.status='consulting';
+    currentToken = token;
+    toast('Calling token '+token+' — '+p.name,'success');
+    closeSheet();
+    updateAll();
+  }
+}
+
+// ===== PATIENT LIST =====
+function renderPatientList(){
+  const el = document.getElementById('patient-list');
+  let items = [];
+  if(patientFilter==='all') items = [...queue];
+  else if(patientFilter==='waiting') items = queue.filter(q=>q.status==='waiting');
+  else items = completed.slice(-15).reverse();
+
+  if(!items.length){el.innerHTML='<p class="text-sm text-gray-400 text-center py-8">No patients</p>';return;}
+
+  el.innerHTML = items.map(p=>{
+    const isConsulting = p.status==='consulting';
+    const isDone = p.status==='done';
+    let badge='';
+    if(isConsulting) badge='<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent-50 text-accent-700 text-[10px] font-bold"><span class="w-1.5 h-1.5 rounded-full bg-accent-500 live-dot"></span>Now</span>';
+    else if(isDone) badge='<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[10px] font-bold">Done</span>';
+    else if(p.checkin) badge='<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 text-[10px] font-bold">Ready</span>';
+    else badge='<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[10px] font-bold">Waiting</span>';
+
+    return `
+      <div class="q-row flex items-center gap-3 ${isDone?'opacity-50':''}" onclick="openPatientSheet(${p.token})">
+        <div class="w-10 h-10 rounded-xl ${isConsulting?'bg-accent-500 text-white':'bg-gray-100 text-gray-800'} flex items-center justify-center font-bold text-sm flex-shrink-0">${p.token}</div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold text-gray-900 truncate">${p.name}</p>
+          <p class="text-xs text-gray-400 truncate">${p.age} · ${p.complaint.slice(0,30)}...</p>
+        </div>
+        <div class="flex-shrink-0">${badge}</div>
+      </div>`;
+  }).join('');
+}
+
+function setPatientFilter(f){
+  patientFilter = f;
+  ['all','waiting','done'].forEach(k=>{
+    document.getElementById('pf-'+k).className='px-3 py-1.5 rounded-lg text-xs font-'+(k===f?'bold bg-brand-50 text-brand-700':'semibold text-gray-500');
+  });
+  renderPatientList();
+}
+
+// ===== HISTORY =====
+function renderHistory(){
+  const el = document.getElementById('history-list');
+  const items = completed.slice().reverse();
+  if(!items.length){el.innerHTML='<p class="text-sm text-gray-400 text-center py-8">No consultations yet today</p>';return;}
+  el.innerHTML = items.map(p=>`
+    <div class="q-row flex items-center gap-3" onclick="openPatientSheet(${p.token})">
+      <div class="w-10 h-10 rounded-xl bg-accent-50 flex items-center justify-center font-bold text-sm text-accent-700 flex-shrink-0">${p.token}</div>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-semibold text-gray-900 truncate">${p.name}</p>
+        <p class="text-xs text-gray-400 truncate">${p.age} · ${p.time}</p>
+        ${p.notes?'<p class="text-xs text-brand-600 mt-0.5 truncate">Dx: '+p.notes+'</p>':''}
+        ${p.rx?'<p class="text-xs text-accent-600 mt-0.5 truncate">Rx: '+p.rx+'</p>':''}
+      </div>
+      <span class="material-symbols-outlined fill text-accent-400 text-[18px]">check_circle</span>
+    </div>
+  `).join('');
+}
+
+// ===== PATIENT SHEET =====
+function openPatientSheet(token){
+  const p = [...queue,...completed].find(q=>q.token===token);
+  if(!p) return;
+  window._sheetToken = token;
+  document.getElementById('ps-token').textContent = p.token;
+  document.getElementById('ps-name').textContent = p.name;
+  document.getElementById('ps-info').textContent = p.age;
+  document.getElementById('ps-time').textContent = p.time;
+  document.getElementById('ps-wait').textContent = p.status==='done'?'—':Math.floor(Math.random()*10+3)+' min';
+  document.getElementById('ps-visit').textContent = p.visit;
+  document.getElementById('ps-complaint').textContent = p.complaint;
+  renderPastRecords(p.name, 'ps-records');
+  document.getElementById('sheet-backdrop').classList.add('show');
+  document.getElementById('patient-sheet').classList.remove('hidden');
+}
+
+function closeSheet(){
+  document.getElementById('sheet-backdrop').classList.remove('show');
+  document.getElementById('patient-sheet').classList.add('hidden');
+}
+
+// ===== SETTINGS =====
+function saveDocSettings(){
+  const doc = document.getElementById('inp-doc').value.trim();
+  const spec = document.getElementById('inp-spec').value.trim();
+  const hosp = document.getElementById('inp-hosp').value.trim();
+  document.getElementById('set-name').textContent = doc;
+  document.getElementById('set-spec').textContent = spec;
+  try{
+    const existing = JSON.parse(localStorage.getItem('turno-custom')||'{}');
+    existing.doctor = doc;
+    existing.dept = spec;
+    existing.hospital = hosp;
+    localStorage.setItem('turno-custom', JSON.stringify(existing));
+  }catch(e){}
+  toast('Settings saved','success');
+  nav('s-home');
+}
+
+// ===== VIEW SWITCHER =====
+function setView(mode){
+  document.body.className='view-'+mode;
+  document.querySelectorAll('.vs-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('vs-'+mode).classList.add('active');
+}
+
+// ===== TOAST =====
+function toast(msg,type){
+  const t=document.getElementById('toast');
+  document.getElementById('toast-msg').textContent=msg;
+  const map={success:['check_circle','text-accent-500'],info:['info','text-brand-500'],warn:['warning','text-warn-500'],error:['error','text-danger-500']};
+  const[icon,color]=map[type]||map.success;
+  const ic=document.getElementById('toast-icon');
+  ic.textContent=icon;ic.className='material-symbols-outlined fill text-[20px] '+color;
+  t.style.display='flex';t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer=setTimeout(()=>{t.classList.remove('show');t.style.display='none';},2500);
+}
+
+// ===== CLOCK =====
+function updateClock(){
+  const now=new Date();
+  const t=now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:false});
+  document.querySelectorAll('#home-clock,#p-clock,#c-clock,#hi-clock,#set-clock').forEach(el=>{el.textContent=t;});
+}
+
+// ===== INIT =====
+document.addEventListener('DOMContentLoaded',()=>{
+  try{
+    const cust=JSON.parse(localStorage.getItem('turno-custom')||'null');
+    if(cust){
+      if(cust.doctor){document.getElementById('inp-doc').value=cust.doctor;document.getElementById('set-name').textContent=cust.doctor;}
+      if(cust.dept){document.getElementById('inp-spec').value=cust.dept;document.getElementById('set-spec').textContent=cust.dept;}
+      if(cust.hospital) document.getElementById('inp-hosp').value=cust.hospital;
+    }
+  }catch(e){}
+  initQueue();
+  updateClock();
+  setInterval(updateClock,1000);
+});
+</script>
+</body>
+</html>
